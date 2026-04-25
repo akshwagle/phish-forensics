@@ -53,7 +53,7 @@ apiApp.post('/api/unshorten', async (req, res) => {
     if (!url) {
       return res.status(400).json({ error: 'url is required' });
     }
-    const result = await urlAnalyzer.unshortenUrl(url);
+    const result = await urlAnalyzer.unshortenURL(url);
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -63,14 +63,26 @@ apiApp.post('/api/unshorten', async (req, res) => {
 apiApp.post('/api/analyze', async (req, res) => {
   try {
     const payload = req.body || {};
+    const emailBody = payload.content || '';
+    const rawHeaders = payload.headers || '';
+    const rawEmail = payload.rawEmail || `${rawHeaders}\n\n${emailBody}`;
 
-    const headerResult = headerAnalyzer.analyze(payload.headers || '');
-    const urlResult = await urlAnalyzer.analyze(payload.urls || []);
-    const senderResult = senderAnalyzer.analyze(payload.headers || '');
-    const contentResult = contentAnalyzer.analyze(payload.content || '');
-    const attachmentResult = attachmentAnalyzer.analyze(payload.attachments || []);
+    const headerResult = headerAnalyzer.analyzeHeaders(rawHeaders || rawEmail);
+    const discoveredUrls = Array.isArray(payload.urls) && payload.urls.length ? payload.urls : urlAnalyzer.extractURLs(emailBody);
+    const urlResult = await urlAnalyzer.analyze(discoveredUrls, emailBody);
+    const senderResult = senderAnalyzer.analyzeSender(rawHeaders || rawEmail);
+    const contentResult = contentAnalyzer.analyzeContent(emailBody);
+    const attachmentResult = attachmentAnalyzer.analyzeAttachments(rawEmail);
 
-    const repDomains = urlResult.urls.map((item) => item.domain).filter(Boolean);
+    const repDomains = urlResult.urls
+      .map((item) => {
+        try {
+          return new URL(item.finalDestination).hostname;
+        } catch (_) {
+          return null;
+        }
+      })
+      .filter(Boolean);
     const reputationResult = domainReputation.checkDomains(repDomains);
 
     const combined = {
@@ -83,7 +95,7 @@ apiApp.post('/api/analyze', async (req, res) => {
     };
 
     const risk = riskScorer.score(combined);
-    const ai = await aiAnalyzer.quickAnalyze(payload, combined);
+    const ai = await aiAnalyzer.aiDeepAnalysis(rawEmail || emailBody, combined);
 
     res.json({
       app: 'PhishLens',
