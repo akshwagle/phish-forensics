@@ -1,26 +1,53 @@
 const axios = require('axios');
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const FAST_MODEL = 'google/gemini-2.5-flash';
+const HACKCLUB_PROXY_URL = 'https://ai.hackclub.com/proxy/v1/chat/completions';
+const DEFAULT_FAST_MODEL = 'google/gemini-2.5-flash';
+const DEFAULT_DEEP_MODEL = 'deepseek/deepseek-r1-0528';
 const TIMEOUT_MS = 30000;
 
-function getHeaders() {
+function getAIConfig() {
+  const provider = (process.env.LLM_PROVIDER || 'openrouter').toLowerCase();
+
+  if (provider === 'hackclub') {
+    if (!process.env.HACKCLUB_API_KEY) {
+      throw new Error('HACKCLUB_API_KEY is not set');
+    }
+    return {
+      provider,
+      url: HACKCLUB_PROXY_URL,
+      fastModel: process.env.HACKCLUB_FAST_MODEL || 'qwen/qwen3-32b',
+      deepModel: process.env.HACKCLUB_DEEP_MODEL || 'qwen/qwen3-32b',
+      headers: {
+        Authorization: `Bearer ${process.env.HACKCLUB_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    };
+  }
+
   if (!process.env.OPENROUTER_API_KEY) {
     throw new Error('OPENROUTER_API_KEY is not set');
   }
 
   return {
-    Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-    'Content-Type': 'application/json'
+    provider: 'openrouter',
+    url: OPENROUTER_URL,
+    fastModel: process.env.OPENROUTER_FAST_MODEL || DEFAULT_FAST_MODEL,
+    deepModel: process.env.OPENROUTER_DEEP_MODEL || DEFAULT_DEEP_MODEL,
+    headers: {
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json'
+    }
   };
 }
 
 async function quickAnalyze(payload, combinedSignals) {
+  const config = getAIConfig();
   try {
     const response = await axios.post(
-      OPENROUTER_URL,
+      config.url,
       {
-        model: FAST_MODEL,
+        model: config.fastModel,
         messages: [
           {
             role: 'system',
@@ -34,29 +61,32 @@ async function quickAnalyze(payload, combinedSignals) {
         ]
       },
       {
-        headers: getHeaders(),
+        headers: config.headers,
         timeout: TIMEOUT_MS
       }
     );
 
     return {
-      model: FAST_MODEL,
+      model: config.fastModel,
+      provider: config.provider,
       response: response.data.choices?.[0]?.message?.content || 'No response'
     };
   } catch (error) {
     return {
-      model: FAST_MODEL,
+      model: config.fastModel,
+      provider: config.provider,
       error: error.response?.data || error.message
     };
   }
 }
 
 async function aiDeepAnalysis(emailContent, technicalFindings) {
+  const config = getAIConfig();
   try {
     const response = await axios.post(
-      OPENROUTER_URL,
+      config.url,
       {
-        model: FAST_MODEL,
+        model: config.deepModel,
         messages: [
           {
             role: 'system',
@@ -75,7 +105,7 @@ async function aiDeepAnalysis(emailContent, technicalFindings) {
         response_format: { type: 'json_object' }
       },
       {
-        headers: getHeaders(),
+        headers: config.headers,
         timeout: TIMEOUT_MS
       }
     );
@@ -95,7 +125,9 @@ async function aiDeepAnalysis(emailContent, technicalFindings) {
         typeof parsed.confidenceScore === 'number'
           ? Math.max(0, Math.min(100, parsed.confidenceScore))
           : 0,
-      summary: parsed.summary || 'No summary generated.'
+      summary: parsed.summary || 'No summary generated.',
+      provider: config.provider,
+      model: config.deepModel
     };
   } catch (error) {
     return {
@@ -105,7 +137,9 @@ async function aiDeepAnalysis(emailContent, technicalFindings) {
       socialEngineeringTactics: [],
       attributionClues: [],
       confidenceScore: 0,
-      summary: `AI deep analysis failed: ${error.response?.data?.error?.message || error.message}`
+      summary: `AI deep analysis failed: ${error.response?.data?.error?.message || error.message}`,
+      provider: config.provider,
+      model: config.deepModel
     };
   }
 }

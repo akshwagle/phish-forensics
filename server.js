@@ -10,6 +10,7 @@ const attachmentAnalyzer = require('./analyzers/attachmentAnalyzer');
 const aiAnalyzer = require('./analyzers/aiAnalyzer');
 const domainReputation = require('./utils/domainReputation');
 const riskScorer = require('./utils/riskScorer');
+const { detectHomograph } = require('./utils/homographDetector');
 
 const API_PORT = Number(process.env.PORT || 3001);
 const WEB_PORT = 3000;
@@ -61,50 +62,97 @@ apiApp.post('/api/unshorten', async (req, res) => {
 });
 
 apiApp.post('/api/analyze', async (req, res) => {
+  const sendEvent = (event, payload) => {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  };
+
   try {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
     const payload = req.body || {};
-    const emailBody = payload.content || '';
-    const rawHeaders = payload.headers || '';
-    const rawEmail = payload.rawEmail || `${rawHeaders}\n\n${emailBody}`;
+    const rawEmail = String(payload.rawEmail || '');
+    const sections = rawEmail.split(/\r?\n\r?\n/);
+    const rawHeaders = sections[0] || '';
+    const emailBody = sections.slice(1).join('\n\n');
 
-    const headerResult = headerAnalyzer.analyzeHeaders(rawHeaders || rawEmail);
-    const discoveredUrls = Array.isArray(payload.urls) && payload.urls.length ? payload.urls : urlAnalyzer.extractURLs(emailBody);
-    const urlResult = await urlAnalyzer.analyze(discoveredUrls, emailBody);
-    const senderResult = senderAnalyzer.analyzeSender(rawHeaders || rawEmail);
-    const contentResult = contentAnalyzer.analyzeContent(emailBody);
-    const attachmentResult = attachmentAnalyzer.analyzeAttachments(rawEmail);
+    const combined = {
+      headerResult: null,
+      senderResult: null,
+      urlResult: { urls: [] },
+      contentResult: null,
+      attachmentResult: null,
+      homographResult: { domains: [] },
+      reputationResult: { domains: [] }
+    };
 
-    const repDomains = urlResult.urls
+    sendEvent('progress', { step: 'headerAnalyzer', message: '✓ Headers parsed' });
+    combined.headerResult = headerAnalyzer.analyzeHeaders(rawHeaders || rawEmail);
+    sendEvent('partial', { section: 'headerResult', data: combined.headerResult });
+
+    sendEvent('progress', { step: 'senderAnalyzer', message: '✓ Sender verified' });
+    combined.senderResult = senderAnalyzer.analyzeSender(rawHeaders || rawEmail);
+    sendEvent('partial', { section: 'senderResult', data: combined.senderResult });
+
+    const discoveredUrls = Array.isArray(payload.urls) && payload.urls.length ? payload.urls : urlAnalyzer.extractURLs(rawEmail);
+    const analyzedUrls = await Promise.all(discoveredUrls.map((url) => urlAnalyzer.analyzeURL(url, rawEmail)));
+    combined.urlResult = { urls: analyzedUrls };
+    sendEvent('progress', {
+      step: 'urlAnalyzer',
+      message: `✓ ${combined.urlResult.urls.length} URLs unshortened`
+    });
+    sendEvent('partial', { section: 'urlResult', data: combined.urlResult });
+
+    sendEvent('progress', { step: 'contentAnalyzer', message: '✓ Content scanned' });
+    combined.contentResult = contentAnalyzer.analyzeContent(emailBody);
+    sendEvent('partial', { section: 'contentResult', data: combined.contentResult });
+
+    sendEvent('progress', { step: 'attachmentAnalyzer', message: '✓ Attachments checked' });
+    combined.attachmentResult = attachmentAnalyzer.analyzeAttachments(rawEmail);
+    sendEvent('partial', { section: 'attachmentResult', data: combined.attachmentResult });
+
+    const domains = combined.urlResult.urls
       .map((item) => {
         try {
-          return new URL(item.finalDestination).hostname;
+          return new URL(item.finalDestination || item.original).hostname;
         } catch (_) {
           return null;
         }
       })
       .filter(Boolean);
-    const reputationResult = domainReputation.checkDomains(repDomains);
 
-    const combined = {
-      headerResult,
-      urlResult,
-      senderResult,
-      contentResult,
-      attachmentResult,
-      reputationResult
+    combined.homographResult = {
+      domains: domains.map((domain) => ({
+        domain,
+        result: detectHomograph(domain)
+      }))
     };
+    sendEvent('progress', { step: 'homographDetector', message: '✓ Lookalike check' });
+    sendEvent('partial', { section: 'homographResult', data: combined.homographResult });
 
-    const risk = riskScorer.score(combined);
+    combined.reputationResult = domainReputation.checkDomains(domains);
+
+    sendEvent('progress', { step: 'aiAnalyzer', message: '✓ AI deep analysis' });
     const ai = await aiAnalyzer.aiDeepAnalysis(rawEmail || emailBody, combined);
+    sendEvent('partial', { section: 'ai', data: ai });
 
-    res.json({
+    const risk = riskScorer.scoreEmail(combined);
+    sendEvent('progress', { step: 'riskScorer', message: '✓ Risk score computed' });
+
+    sendEvent('complete', {
       app: 'PhishLens',
       risk,
       signals: combined,
       ai
     });
+
+    res.write('data: [DONE]\n\n');
+    res.end();
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendEvent('error', { error: error.message });
+    res.end();
   }
 });
 
