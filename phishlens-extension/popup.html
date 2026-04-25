@@ -61,11 +61,75 @@ body { width:280px; background:#111827; color:#f1f5f9; font-family:system-ui,-ap
 .btn-open { background:#1f2937; color:#9ca3af; }
 .btn-full-scan { background:linear-gradient(135deg,#3b82f6,#6366f1); color:#fff; width:calc(100% - 28px); margin:0 14px 6px; padding:10px; border-radius:6px; border:none; font-size:13px; font-weight:700; cursor:pointer; }
 .btn-full-scan:hover { opacity:.9; }
-.btn-deep-scan { background:linear-gradient(135deg,#7c3aed,#4f46e5); color:#fff; width:calc(100% - 28px); margin:0 14px 12px; padding:9px; border-radius:6px; border:none; font-size:12px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; }
-.btn-deep-scan:hover { opacity:.9; }
-.btn-deep-scan .deep-badge { background:rgba(255,255,255,.18); font-size:9px; padding:1px 5px; border-radius:3px; letter-spacing:.4px; }
-.btn-deep-scan:disabled { background:#1f2937; color:#374151; cursor:default; }
 .btn-clear { background:#475569; color:#f1f5f9; flex:0.5; }
+
+/* ── Deep Scan section ─────────────────────────────────────────────────────── */
+.ds-wrap { padding:0 14px 14px; }
+#deep-scan-btn {
+  width:100%; padding:9px 12px; border-radius:6px; border:1px solid #4f46e5;
+  background:linear-gradient(135deg,#2e1065,#1e1b4b); color:#a5b4fc;
+  font-size:12px; font-weight:700; cursor:pointer; display:flex;
+  align-items:center; justify-content:center; gap:6px; transition:opacity .15s;
+}
+#deep-scan-btn:hover  { opacity:.85; }
+#deep-scan-btn:disabled { opacity:.4; cursor:default; }
+.ds-badge { background:rgba(99,102,241,.3); font-size:9px; padding:1px 5px; border-radius:3px; letter-spacing:.5px; color:#818cf8; }
+
+/* Status box */
+#deep-scan-status { margin-top:10px; background:#0d1117; border:1px solid #312e81; border-radius:8px; padding:10px; }
+.ds-status-hdr { display:flex; align-items:center; gap:6px; font-size:11px; color:#818cf8; font-weight:600; margin-bottom:8px; }
+.ds-spin { display:inline-block; width:9px; height:9px; border:2px solid #312e81; border-top-color:#818cf8; border-radius:50%; animation:spin .7s linear infinite; flex-shrink:0; }
+.deep-scan-steps { display:flex; flex-direction:column; gap:5px; }
+.ds-step { font-size:11px; color:#475569; padding:1px 0; transition:color .2s; }
+.ds-step.active { color:#c7d2fe; }
+.ds-step.done   { color:#4ade80; }
+
+/* Result card */
+#deep-scan-result { margin-top:10px; }
+.ds-result { background:#0d1117; border-radius:8px; overflow:hidden; }
+.ds-result-hdr { font-size:10px; font-weight:700; letter-spacing:.5px; color:#475569; padding:8px 12px 4px; text-transform:uppercase; }
+.ds-elapsed { color:#6366f1; }
+
+.ds-verdict-block { display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid #1e2535; }
+.ds-verdict-score { font-size:32px; font-weight:900; line-height:1; font-family:monospace; }
+.ds-verdict-right {}
+.ds-verdict-label { font-size:17px; font-weight:800; letter-spacing:.5px; }
+.ds-consensus    { font-size:10px; color:#64748b; margin-top:2px; }
+.ds-verdict-block.safe      .ds-verdict-score, .ds-verdict-block.safe      .ds-verdict-label { color:#22c55e; }
+.ds-verdict-block.suspicious .ds-verdict-score,.ds-verdict-block.suspicious .ds-verdict-label { color:#f59e0b; }
+.ds-verdict-block.dangerous  .ds-verdict-score,.ds-verdict-block.dangerous  .ds-verdict-label { color:#ef4444; }
+
+.ds-section-lbl { font-size:9px; font-weight:700; color:#374151; letter-spacing:.7px; text-transform:uppercase; padding:8px 12px 3px; }
+
+/* Model verdict bars */
+.ds-models { padding:0 12px 6px; display:flex; flex-direction:column; gap:5px; }
+.ds-model-row { display:flex; align-items:center; gap:6px; }
+.ds-model-name  { font-size:10px; color:#64748b; width:62px; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ds-bar-bg { flex:1; height:6px; background:#1e2535; border-radius:3px; overflow:hidden; }
+.ds-bar    { height:100%; border-radius:3px; transition:width .5s ease; }
+.ds-bar.safe       { background:#22c55e; }
+.ds-bar.suspicious { background:#f59e0b; }
+.ds-bar.dangerous  { background:#ef4444; }
+.ds-model-score { font-size:10px; font-weight:700; width:24px; text-align:right; }
+.ds-model-score.safe       { color:#22c55e; }
+.ds-model-score.suspicious { color:#f59e0b; }
+.ds-model-score.dangerous  { color:#ef4444; }
+
+/* Technical signals */
+.ds-signals  { padding:0 12px 6px; display:flex; flex-direction:column; gap:3px; }
+.ds-sig      { font-size:11px; color:#94a3b8; line-height:1.4; }
+.ds-sig.pass { color:#4ade80; }
+.ds-sig.fail { color:#f87171; }
+.ds-sig.warn { color:#fbbf24; }
+
+/* Evidence */
+.ds-evidence { padding:0 12px 6px; display:flex; flex-direction:column; gap:3px; }
+.ds-ev-item  { font-size:11px; color:#94a3b8; line-height:1.4; }
+
+/* Rescan */
+.ds-rescan-row { padding:8px 12px 10px; }
+.ds-btn-rescan { width:100%; padding:7px; border-radius:5px; border:1px solid #1e2535; background:#111827; color:#6366f1; font-size:11px; font-weight:600; cursor:pointer; }
+.ds-btn-rescan:hover { background:#1e2535; }
 
 .spin { display:inline-block; width:10px; height:10px; border:2px solid #374151; border-top-color:#60a5fa; border-radius:50%; animation:spin .6s linear infinite; vertical-align:middle; margin-right:4px; }
 @keyframes spin { to { transform:rotate(360deg); } }
@@ -106,10 +170,30 @@ body { width:280px; background:#111827; color:#f1f5f9; font-family:system-ui,-ap
 <div class="divider"></div>
 
 <button class="btn-full-scan" id="btn-full-scan" style="margin-top:12px;">🔍 Scan This Page</button>
-<button class="btn-deep-scan" id="btn-deep-scan">
-  🧬 Run Deep Scan
-  <span class="deep-badge">3–5 MIN · 3 AI MODELS</span>
-</button>
+
+<div class="ds-wrap">
+  <button id="deep-scan-btn">
+    🔬 Deep Scan
+    <span class="ds-badge">3–5 MIN · 3 AI MODELS</span>
+  </button>
+
+  <div id="deep-scan-status" style="display:none">
+    <div class="ds-status-hdr">
+      <span class="ds-spin"></span>
+      <span id="ds-status-label">Running multi-model analysis…</span>
+    </div>
+    <div class="deep-scan-steps">
+      <div id="step-source"   class="ds-step pending">⏳ Fetching page source…</div>
+      <div id="step-dns"      class="ds-step pending">⏳ Checking DNS records…</div>
+      <div id="step-cert"     class="ds-step pending">⏳ Checking certificate age…</div>
+      <div id="step-headers"  class="ds-step pending">⏳ Reading security headers…</div>
+      <div id="step-ai"       class="ds-step pending">⏳ Running 3 AI models…</div>
+      <div id="step-consensus" class="ds-step pending">⏳ Building consensus…</div>
+    </div>
+  </div>
+
+  <div id="deep-scan-result" style="display:none"></div>
+</div>
 
 <div class="btns">
   <button class="btn btn-scan" id="btn-scan">🔬 Scan Now</button>

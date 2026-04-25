@@ -965,6 +965,12 @@
     let domain;
     try { domain = new URL(pageURL).hostname; } catch { return; }
 
+    const startTime = Date.now();
+
+    // Storage step keys match popup's STEP_MAP
+    const STORAGE_KEYS = ['source', 'dns', 'cert', 'headers', 'ai', 'consensus'];
+
+    // In-overlay steps (7 entries — we merge fetch+extract into "source")
     const STEPS = [
       { label: 'Fetching raw page source',          status: 'pending', detail: '' },
       { label: 'Extracting signals from HTML',       status: 'pending', detail: '' },
@@ -975,38 +981,56 @@
       { label: 'Building consensus verdict',         status: 'pending', detail: '' }
     ];
 
-    const setStep = (i, status, detail = '') => {
+    // Map overlay step index → storage key index (steps 0+1 both map to "source")
+    const OVERLAY_TO_STORAGE = [0, 0, 1, 2, 3, 4, 5];
+
+    async function syncStorage(storageKeyIdx, status, detail = '') {
+      const current = {};
+      STORAGE_KEYS.forEach((key, i) => {
+        if (i < storageKeyIdx) current[key] = { status: 'done',   detail: '' };
+        else if (i === storageKeyIdx) current[key] = { status, detail };
+        else current[key] = { status: 'pending', detail: '' };
+      });
+      try {
+        await chrome.storage.local.set({ deepScanSteps: current, deepScanRunning: true });
+      } catch {}
+    }
+
+    const setStep = async (i, status, detail = '') => {
       STEPS[i].status = status; STEPS[i].detail = detail;
       updateDeepProgress(STEPS);
+      await syncStorage(OVERLAY_TO_STORAGE[i], status, detail);
     };
 
+    // Initialise storage
+    try { await chrome.storage.local.set({ deepScanRunning: true, deepScanResult: null }); } catch {}
     updateDeepProgress(STEPS);
 
-    // Step 0 — raw source
-    setStep(0, 'active');
+    // Step 0 — fetch raw source
+    await setStep(0, 'active');
     const rawHTML = await fetchRawSource(pageURL);
-    setStep(0, 'done', `${(rawHTML.length / 1024).toFixed(1)} KB`);
+    await setStep(0, 'done', `${(rawHTML.length / 1024).toFixed(1)} KB`);
 
-    // Step 1 — extract
-    setStep(1, 'active');
+    // Step 1 — extract (maps to same "source" storage key, just overwrites detail)
+    await setStep(1, 'active');
     const extracted = deepExtract(rawHTML, pageURL);
-    setStep(1, 'done',
+    await setStep(1, 'done',
       `${extracted.allURLs.links.length} links · ${extracted.allURLs.forms.length} forms · ` +
       `${extracted.scriptFlags.totalInlineScripts} scripts`);
 
-    // Steps 2-4 — network checks in parallel
-    setStep(2, 'active'); setStep(3, 'active'); setStep(4, 'active');
+    // Steps 2-4 — DNS, cert, headers in parallel
+    await setStep(2, 'active'); await setStep(3, 'active'); await setStep(4, 'active');
     const [dns, certAge, secHeaders] = await Promise.all([
       checkDNS(domain),
       checkCertAge(domain),
       getSecurityHeaders(pageURL)
     ]);
-    setStep(2, 'done', dns.error     ? 'Failed' : `MX:${dns.hasMXRecords ? '✓' : '✗'} SPF:${dns.hasSPFRecord ? '✓' : '✗'} DMARC:${dns.hasDMARCRecord ? '✓' : '✗'}`);
-    setStep(3, 'done', certAge.error ? 'Failed' : certAge.noCerts ? 'No certs found' : `${certAge.daysSinceFirstCert} days old`);
-    setStep(4, 'done', secHeaders.error ? 'Failed' : `HSTS:${secHeaders.hasHSTS ? '✓' : '✗'} CSP:${secHeaders.hasCSP ? '✓' : '✗'}`);
+    await setStep(2, 'done', dns.error     ? 'Failed' : `MX:${dns.hasMXRecords ? '✓' : '✗'} SPF:${dns.hasSPFRecord ? '✓' : '✗'}`);
+    await setStep(3, 'done', certAge.error ? 'Failed' : certAge.noCerts ? 'No certs found' : `${certAge.daysSinceFirstCert} days old`);
+    await setStep(4, 'done', secHeaders.error ? 'Failed' : `HSTS:${secHeaders.hasHSTS ? '✓' : '✗'} CSP:${secHeaders.hasCSP ? '✓' : '✗'}`);
 
-    // Step 5 — AI models
-    setStep(5, 'active', 'llama-3.1 · qwen3-32b · mistral-7b');
+    // Step 5 — 3 AI models
+    await setStep(5, 'active', 'llama-3.1 · qwen3-32b · mistral-7b');
     const pageData = {
       pageURL, domain,
       domainSignals: extracted.domainSignals,
@@ -1022,22 +1046,37 @@
     };
     const modelResults = await multiModelAnalysis(pageData);
     const successCount = modelResults.filter(r => r.result !== null).length;
-    setStep(5, 'done', `${successCount}/3 models responded`);
+    await setStep(5, 'done', `${successCount}/3 models responded`);
 
     // Step 6 — consensus
-    setStep(6, 'active');
+    await setStep(6, 'active');
     const consensus = buildConsensus(modelResults);
+
     if (!consensus) {
-      setStep(6, 'done', 'All models failed — no consensus');
+      await setStep(6, 'done', 'All models failed — no consensus');
+      try { await chrome.storage.local.set({ deepScanRunning: false }); } catch {}
       await new Promise(r => setTimeout(r, 1500));
       removeDeepOverlay();
       return;
     }
-    setStep(6, 'done', `Score: ${consensus.finalScore} · ${consensus.finalVerdict}`);
+
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    await setStep(6, 'done', `Score: ${consensus.finalScore} · ${consensus.finalVerdict} · ${elapsed}s`);
+
+    const details = { dns, certAge, secHeaders, extracted };
+
+    // Write final result to storage → popup reads this and renders result card
+    try {
+      await chrome.storage.local.set({
+        deepScanRunning: false,
+        deepScanResult:  { consensus, details, elapsed }
+      });
+    } catch {}
 
     await new Promise(r => setTimeout(r, 800));
     removeDeepOverlay();
-    showDeepScanResults(consensus, { dns, certAge, secHeaders, extracted });
+    // Also show the in-page panel for users who have the page focused
+    showDeepScanResults(consensus, details);
   }
 
   // ── Message listener ───────────────────────────────────────────────────────
