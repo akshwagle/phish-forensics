@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PhishLens</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>PhishLens</h1>
+      <p class="subtitle">Phishing Forensics Sandbox</p>
+
+      <textarea id="emailContent" placeholder="Paste suspicious email content"></textarea>
+      <textarea id="emailHeaders" placeholder="Paste raw email headers (optional)"></textarea>
+      <input id="urls" placeholder="Comma-separated URLs" />
+      <input id="attachments" placeholder="Comma-separated attachment names" />
+
+      <div class="actions">
+        <button id="analyzeBtn">Analyze</button>
+        <button id="explainBtn">Deep Explain</button>
+      </div>
+
+      <pre id="output">Results appear here...</pre>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
