@@ -322,6 +322,103 @@ button, select, textarea, input { font-family: var(--sans); }
   box-shadow: var(--sh-sm);
 }
 
+/* ============================================================
+   MODE SWITCHER — primary detection-mode selector
+   Sits ABOVE the input source tabs and visually outranks them.
+   ============================================================ */
+.mode-switch {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  margin-bottom: var(--sp-3);
+  box-shadow: var(--sh-sm);
+}
+
+.mode-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
+}
+
+.mode-tab:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.mode-tab.active {
+  background: var(--accent);
+  color: #ffffff;
+  box-shadow: 0 1px 0 var(--line) inset, 0 6px 14px var(--accent-bg);
+}
+
+body.theme-light .mode-tab.active {
+  color: #ffffff;
+}
+
+.mode-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.85;
+}
+
+.mode-tab.active .mode-tab-icon { opacity: 1; }
+
+.mode-tab-label { white-space: nowrap; }
+
+/* Mode panel — only the active one renders */
+.mode-panel {
+  display: none;
+  flex-direction: column;
+  gap: var(--sp-2);
+  flex: 1;
+  min-height: 0;
+}
+
+.mode-panel.active { display: flex; }
+
+/* Single-line URL input for URL mode */
+.forensic-input--single {
+  min-height: 0;
+  height: 46px;
+  padding: 10px 14px;
+  font-size: 0.88rem;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  resize: none;
+}
+
+/* Compact textarea for SMS mode */
+.forensic-input--small {
+  min-height: 160px;
+}
+
+/* Mode switch responsive: shrink padding, hide icons on narrow phones */
+@media (max-width: 640px) {
+  .mode-switch { gap: 2px; padding: 3px; }
+  .mode-tab { padding: 8px 4px; font-size: 0.74rem; gap: 4px; }
+  .mode-tab-icon svg { width: 14px; height: 14px; }
+}
+@media (max-width: 380px) {
+  .mode-tab-icon { display: none; }
+  .mode-tab { padding: 8px 2px; font-size: 0.72rem; }
+}
+
 /* Tab content */
 .tab-content {
   display: none;

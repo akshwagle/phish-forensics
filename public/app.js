@@ -1,9 +1,62 @@
 const API_BASE = 'http://localhost:3001';
 
 const appState = {
-  currentEmail: '',
+  mode: 'email',
+  currentInput: '',
+  currentEmail: '', // legacy alias kept for PDF/IOC features
   analysis: null,
   isAnalyzing: false
+};
+
+/* ============================================================
+   MODE METADATA — drives panel titles, button labels, loader copy,
+   verdict eyebrow, and analyze() payload shape.
+   ============================================================ */
+const MODE_INFO = {
+  email: {
+    label: 'Email',
+    panelTitle: 'Input',
+    panelSub: 'Paste, upload, or load a sample',
+    btnIdle: 'ANALYZE EMAIL',
+    btnLoading: 'Analyzing…',
+    loaderTitle: 'Analyzing email…',
+    loaderSub: 'Scanning headers, links, and content',
+    verdictTitle: 'Email Analysis Complete',
+    emptyMessage: 'Paste an email and click Analyze to begin'
+  },
+  url: {
+    label: 'URL',
+    panelTitle: 'URL Scanner',
+    panelSub: 'Single URL — checks domain, TLD, redirects, lookalikes',
+    btnIdle: 'SCAN URL',
+    btnLoading: 'Scanning…',
+    loaderTitle: 'Scanning URL…',
+    loaderSub: 'Inspecting domain, TLD, redirects and lookalikes',
+    verdictTitle: 'URL Scan Complete',
+    emptyMessage: 'Paste a URL and click Scan to begin'
+  },
+  sms: {
+    label: 'SMS',
+    panelTitle: 'SMS Analyzer',
+    panelSub: 'Paste an SMS to detect smishing patterns',
+    btnIdle: 'ANALYZE SMS',
+    btnLoading: 'Analyzing…',
+    loaderTitle: 'Analyzing SMS…',
+    loaderSub: 'Detecting smishing patterns and shortened links',
+    verdictTitle: 'SMS Analysis Complete',
+    emptyMessage: 'Paste an SMS and click Analyze to begin'
+  },
+  job: {
+    label: 'Job Offer',
+    panelTitle: 'Recruiter / Job Offer',
+    panelSub: 'Paste a recruiter message or job offer',
+    btnIdle: 'ANALYZE OFFER',
+    btnLoading: 'Analyzing…',
+    loaderTitle: 'Analyzing job offer…',
+    loaderSub: 'Checking sender domain, salary realism, and harvesting tactics',
+    verdictTitle: 'Job Offer Analysis Complete',
+    emptyMessage: 'Paste a recruiter message and click Analyze to begin'
+  }
 };
 
 const samples = {
@@ -53,6 +106,81 @@ Subject: Your October developer newsletter
 Hello developer,
 Here is your monthly product update from GitHub with changelog highlights and event announcements.
 Manage preferences at https://github.com/settings/notifications`
+};
+
+const urlSamples = {
+  typo: 'https://paypa1-secure-login.com/account/verify',
+  homograph: 'https://раypal.com/signin', // Cyrillic 'р' and 'а'
+  shortener: 'https://bit.ly/account-update-now',
+  subdomain: 'https://www.amazon.com.security-update.top/orders/sign-in',
+  ip: 'http://185.244.25.44/login.html',
+  legit: 'https://github.com'
+};
+
+const smsSamples = {
+  bank: 'HDFC ALERT: Your account has been locked due to suspicious activity. Reactivate within 2 hours: http://hdfc-secure.click/verify Failure may permanently disable banking.',
+  package: 'FedEx: Your package #FX2871 is held at customs. Pay $2.99 redelivery fee to release: http://fedex-redirect.click/pay',
+  prize: "Congratulations! You've won an iPhone 15 Pro in the Amazon prime day giveaway. Claim within 1 hour: bit.ly/iphone-prize",
+  otp: "Your OTP is 729812. Don't share. Reply YES to confirm transaction of Rs.45000. Call 1800-XXX immediately if not authorized.",
+  emergency: 'Hi Mom, I lost my phone, this is my new number. Please send Rs.5000 via Google Pay to 9876543210 ASAP for emergency. Will explain later.',
+  legit: 'Your delivery OTP is 4892. Share only with the BlueDart courier on arrival. Track at www.bluedart.com/tracking'
+};
+
+const jobSamples = {
+  bigtech: `From: hr.recruiter@gmail.com
+Subject: Senior Software Engineer at Google - Immediate Joining
+
+Dear Candidate,
+
+Greetings from Google Talent Acquisition Team!
+
+We have shortlisted your profile for the Senior Software Engineer position with a CTC of $250,000/year, fully remote.
+
+Please share your passport, PAN card, bank account details, address proof and 6 months of salary slips so we can process the offer letter today.
+
+Position closes in 24 hours. Limited slots.
+
+Regards,
+Mark Stevens
+Sr. Director, Talent Acquisition - Google`,
+  deposit: `From: hr@payroll-onboarding.work
+Subject: Welcome to ABC Tech - Onboarding
+
+Hi,
+
+Congratulations! You've been selected for the Data Analyst role at ABC Tech with a monthly salary of $4500.
+
+To complete onboarding, please pay a refundable deposit of $499 via wire transfer for laptop courier within 24 hours. Bank details attached.
+
+Once payment is received, your laptop and offer letter will be dispatched.`,
+  dataentry: `From: jobs.global2026@outlook.com
+Subject: Easy Work From Home - Earn $9000/month
+
+We are hiring for simple data entry work. Earn $9000/month with just 2 hours/day.
+
+No experience needed. Full training provided.
+
+Send your bank account, Aadhaar, PAN and a recent photo to confirm registration. Limited slots, respond within 30 minutes.`,
+  reship: `From: warehouse.ops@us-shipping-partners.com
+Subject: Quality Control Associate - Remote, $4500/month
+
+Easy remote work-from-home role. We will ship packages to your home address. You re-pack them and forward to our customers in another country.
+
+We pay $4500/month + bonuses for each shipment.
+
+Reply with your full address, photo ID, and bank details.`,
+  legit: `From: jane.smith@netflix.com
+Subject: Netflix Software Engineer - Interview Invite
+
+Hi,
+
+Thanks for applying to Netflix. I'd love to schedule a 30-min screening call this week to discuss the Senior Software Engineer (Streaming Platform) role.
+
+Please share 2-3 time slots that work for you. No documents needed at this stage.
+
+Best,
+Jane Smith
+Recruiting, Netflix`
 };
 
 const el = {
@@ -123,7 +251,27 @@ const el = {
   linkCardsList: document.getElementById('linkCardsList'),
   brandIcon: document.getElementById('brandIcon'),
   analyzeBtnLabel: document.getElementById('analyzeBtnLabel'),
-  loaderSteps: document.getElementById('loaderSteps')
+  loaderSteps: document.getElementById('loaderSteps'),
+  // multi-mode controls
+  modeTabs: [...document.querySelectorAll('.mode-switch .mode-tab')],
+  modePanels: [...document.querySelectorAll('.mode-panel')],
+  panelTitle: document.getElementById('panelTitle'),
+  panelSub: document.getElementById('panelSub'),
+  loaderTitle: document.getElementById('loaderTitle'),
+  loaderSub: document.getElementById('loaderSub'),
+  verdictEyebrow: document.getElementById('verdictEyebrow'),
+  // URL mode
+  urlInput: document.getElementById('urlInput'),
+  urlSamplePicker: document.getElementById('urlSamplePicker'),
+  urlLoadSampleBtn: document.getElementById('urlLoadSampleBtn'),
+  // SMS mode
+  smsInput: document.getElementById('smsInput'),
+  smsSamplePicker: document.getElementById('smsSamplePicker'),
+  smsLoadSampleBtn: document.getElementById('smsLoadSampleBtn'),
+  // Job mode
+  jobInput: document.getElementById('jobInput'),
+  jobSamplePicker: document.getElementById('jobSamplePicker'),
+  jobLoadSampleBtn: document.getElementById('jobLoadSampleBtn')
 };
 
 const charts = { bars: null, donut: null };
@@ -462,6 +610,7 @@ function markAllStepsComplete() {
 function setUiState(state) {
   const btn = el.analyzeBtn;
   const spinner = btn ? btn.querySelector('.btn-spinner') : null;
+  const info = MODE_INFO[appState.mode] || MODE_INFO.email;
 
   const apply = (showEmpty, showLoading, showReport, brandScan, btnLoading) => {
     if (el.emptyState) el.emptyState.classList.toggle('hidden', !showEmpty);
@@ -473,7 +622,9 @@ function setUiState(state) {
       btn.disabled = btnLoading;
     }
     if (spinner) spinner.classList.toggle('hidden', !btnLoading);
-    if (el.analyzeBtnLabel) el.analyzeBtnLabel.textContent = btnLoading ? 'Analyzing…' : 'ANALYZE EMAIL';
+    if (el.analyzeBtnLabel) {
+      el.analyzeBtnLabel.textContent = btnLoading ? info.btnLoading : info.btnIdle;
+    }
   };
 
   if (state === 'loading') {
@@ -484,6 +635,53 @@ function setUiState(state) {
   } else {
     apply(true, false, false, false, false);
     stopStepTicker();
+  }
+}
+
+/* ============================================================
+   MODE SWITCHER — toggles input panels + per-mode UI copy
+   ============================================================ */
+function setMode(modeId) {
+  const id = MODE_INFO[modeId] ? modeId : 'email';
+  appState.mode = id;
+  const info = MODE_INFO[id];
+
+  el.modeTabs.forEach((tab) => {
+    const active = tab.dataset.mode === id;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+
+  el.modePanels.forEach((panel) => {
+    const active = panel.dataset.modePanel === id;
+    panel.classList.toggle('active', active);
+    if (active) panel.removeAttribute('hidden');
+    else panel.setAttribute('hidden', '');
+  });
+
+  if (el.panelTitle) el.panelTitle.textContent = info.panelTitle;
+  if (el.panelSub) el.panelSub.textContent = info.panelSub;
+  if (el.loaderTitle) el.loaderTitle.textContent = info.loaderTitle;
+  if (el.loaderSub) el.loaderSub.textContent = info.loaderSub;
+  if (el.analyzeBtnLabel) el.analyzeBtnLabel.textContent = info.btnIdle;
+
+  const emptyHeading = el.emptyState?.querySelector('h2');
+  if (emptyHeading) emptyHeading.textContent = info.emptyMessage;
+
+  // If we're flipping modes mid-session, reset to idle so old results don't linger.
+  if (!appState.isAnalyzing) {
+    setUiState('idle');
+    if (el.progressTrack) el.progressTrack.textContent = 'Idle';
+  }
+}
+
+function getCurrentInput() {
+  switch (appState.mode) {
+    case 'url': return (el.urlInput?.value || '').trim();
+    case 'sms': return (el.smsInput?.value || '').trim();
+    case 'job': return (el.jobInput?.value || '').trim();
+    case 'email':
+    default:    return (el.rawEmail?.value || '').trim();
   }
 }
 
@@ -948,6 +1146,14 @@ function renderReport(report) {
   }
 
   el.severityLabel.textContent = severityText(score);
+
+  // Mode-aware verdict eyebrow (e.g. "Email Analysis Complete")
+  if (el.verdictEyebrow) {
+    const modeId = data.mode || appState.mode || 'email';
+    const fallback = MODE_INFO[modeId]?.verdictTitle || 'Analysis Complete';
+    el.verdictEyebrow.textContent = data.modeLabel || fallback;
+  }
+
   const displaySummary =
     data.ai?.summary && data.ai.summary.trim().length > 0
       ? data.ai.summary
@@ -1198,13 +1404,15 @@ function mergePartial(section, data) {
 }
 
 async function analyze() {
-  const rawEmail = el.rawEmail.value.trim();
-  if (!rawEmail) {
-    alert('Paste or load an email first.');
+  const content = getCurrentInput();
+  const info = MODE_INFO[appState.mode] || MODE_INFO.email;
+  if (!content) {
+    alert(`Provide ${info.label.toLowerCase()} input first.`);
     return;
   }
 
-  appState.currentEmail = rawEmail;
+  appState.currentInput = content;
+  appState.currentEmail = content; // legacy alias used by PDF/IOC code paths
   appState.analysis = { signals: {} };
   appState.isAnalyzing = true;
 
@@ -1218,7 +1426,7 @@ async function analyze() {
     const response = await fetch(`${API_BASE}/api/analyze`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rawEmail })
+      body: JSON.stringify({ mode: appState.mode, content })
     });
 
     if (!response.ok || !response.body) {
@@ -1454,6 +1662,29 @@ el.emlUpload.addEventListener('change', async (event) => {
   setTab('paste');
 });
 
+/* === MODE SWITCHER + per-mode sample pickers ============== */
+el.modeTabs.forEach((tab) =>
+  tab.addEventListener('click', () => setMode(tab.dataset.mode))
+);
+
+if (el.urlSamplePicker && el.urlInput) {
+  const applyUrl = () => { el.urlInput.value = urlSamples[el.urlSamplePicker.value] || ''; };
+  if (el.urlLoadSampleBtn) el.urlLoadSampleBtn.addEventListener('click', applyUrl);
+  el.urlSamplePicker.addEventListener('change', applyUrl);
+}
+
+if (el.smsSamplePicker && el.smsInput) {
+  const applySms = () => { el.smsInput.value = smsSamples[el.smsSamplePicker.value] || ''; };
+  if (el.smsLoadSampleBtn) el.smsLoadSampleBtn.addEventListener('click', applySms);
+  el.smsSamplePicker.addEventListener('change', applySms);
+}
+
+if (el.jobSamplePicker && el.jobInput) {
+  const applyJob = () => { el.jobInput.value = jobSamples[el.jobSamplePicker.value] || ''; };
+  if (el.jobLoadSampleBtn) el.jobLoadSampleBtn.addEventListener('click', applyJob);
+  el.jobSamplePicker.addEventListener('change', applyJob);
+}
+
 el.analyzeBtn.addEventListener('click', analyze);
 if (el.showReasoningBtn) el.showReasoningBtn.addEventListener('click', streamReasoning);
 if (el.downloadPdfBtn) el.downloadPdfBtn.addEventListener('click', downloadPdf);
@@ -1489,3 +1720,12 @@ if (prefill) {
 } else {
   el.rawEmail.value = samples.paypal;
 }
+
+// Seed the per-mode inputs with their default samples so each tab is preloaded.
+if (el.urlInput) el.urlInput.value = urlSamples.typo;
+if (el.smsInput) el.smsInput.value = smsSamples.bank;
+if (el.jobInput) el.jobInput.value = jobSamples.bigtech;
+
+// Honor ?mode=url|sms|job query param, otherwise default to email.
+const initialMode = params.get('mode');
+setMode(MODE_INFO[initialMode] ? initialMode : 'email');
