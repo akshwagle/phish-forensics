@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>PhishLens Guard</title>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+body { width:280px; background:#111827; color:#f1f5f9; font-family:system-ui,-apple-system,sans-serif; font-size:13px; }
+
+.hdr { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid #1f2937; }
+.logo { display:flex; align-items:center; gap:8px; font-weight:700; font-size:14px; }
+.logo-icon { width:26px; height:26px; background:linear-gradient(135deg,#3b82f6,#6366f1); border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:14px; }
+.live { display:flex; align-items:center; gap:5px; font-size:11px; color:#6b7280; }
+.dot { width:6px; height:6px; border-radius:50%; background:#22c55e; }
+.dot.off { background:#6b7280; }
+
+.body { padding:14px; }
+.row { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.domain { font-size:13px; font-weight:600; color:#e2e8f0; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.score { font-size:28px; font-weight:800; }
+.score.safe { color:#22c55e; }
+.score.suspicious { color:#f59e0b; }
+.score.dangerous { color:#ef4444; }
+.score.pending { color:#6b7280; }
+
+.badge { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:600; margin-bottom:8px; }
+.badge.safe { background:#14532d44; color:#4ade80; border:1px solid #166534; }
+.badge.suspicious { background:#78350f44; color:#fbbf24; border:1px solid #92400e; }
+.badge.dangerous { background:#7f1d1d44; color:#f87171; border:1px solid #991b1b; }
+.badge.pending { background:#1f293780; color:#94a3b8; border:1px solid #374151; }
+
+.bar-bg { background:#1f2937; border-radius:3px; height:4px; margin-bottom:8px; }
+.bar { height:4px; border-radius:3px; transition:width .5s ease; }
+.bar.safe { background:#22c55e; }
+.bar.suspicious { background:#f59e0b; }
+.bar.dangerous { background:#ef4444; }
+
+.reason { font-size:11px; color:#9ca3af; margin-bottom:4px; line-height:1.4; }
+.source { font-size:10px; color:#374151; margin-bottom:10px; }
+
+.signals { margin-bottom:10px; }
+.sig { font-size:11px; color:#9ca3af; padding:1px 0; }
+.sig::before { content:"• "; color:#f59e0b; }
+
+.divider { height:1px; background:#1f2937; }
+
+.controls { padding:10px 14px; display:flex; align-items:center; justify-content:space-between; }
+.ctrl-label { font-size:12px; color:#9ca3af; }
+.sw { position:relative; width:34px; height:18px; }
+.sw input { opacity:0; width:0; height:0; }
+.sw-track { position:absolute; inset:0; background:#374151; border-radius:99px; cursor:pointer; transition:.2s; }
+.sw-track::before { content:""; position:absolute; width:12px; height:12px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; }
+.sw input:checked + .sw-track { background:#3b82f6; }
+.sw input:checked + .sw-track::before { transform:translateX(16px); }
+
+.btns { display:flex; gap:8px; padding:0 14px 12px; }
+.btn { flex:1; padding:8px; border-radius:6px; border:none; font-size:12px; font-weight:600; cursor:pointer; transition:opacity .15s; }
+.btn:hover { opacity:.85; }
+.btn-scan { background:#1d4ed8; color:#fff; }
+.btn-scan:disabled { background:#1f2937; color:#374151; cursor:default; }
+.btn-open { background:#1f2937; color:#9ca3af; }
+.btn-full-scan { background:linear-gradient(135deg,#3b82f6,#6366f1); color:#fff; width:calc(100% - 28px); margin:0 14px 12px; padding:10px; border-radius:6px; border:none; font-size:13px; font-weight:700; cursor:pointer; }
+.btn-full-scan:hover { opacity:.9; }
+.btn-clear { background:#475569; color:#f1f5f9; flex:0.5; }
+
+.spin { display:inline-block; width:10px; height:10px; border:2px solid #374151; border-top-color:#60a5fa; border-radius:50%; animation:spin .6s linear infinite; vertical-align:middle; margin-right:4px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+.footer { text-align:center; padding:8px 14px; font-size:10px; color:#374151; border-top:1px solid #1f2937; }
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo">
+    <div class="logo-icon">🔍</div>
+    PhishLens Guard
+  </div>
+  <div class="live">
+    <div class="dot" id="dot"></div>
+    <span id="live-txt">Active</span>
+  </div>
+</div>
+
+<div class="body">
+  <div class="row">
+    <div class="domain" id="domain">Loading…</div>
+    <div class="score pending" id="score">—</div>
+  </div>
+  <div class="badge pending" id="badge">⏳ Pending</div>
+  <div class="bar-bg"><div class="bar safe" id="bar" style="width:0%"></div></div>
+  <div class="reason" id="reason">Not yet analyzed</div>
+  <div class="source" id="source"></div>
+  <div class="signals" id="signals"></div>
+</div>
+
+<div class="divider"></div>
+<div class="controls">
+  <span class="ctrl-label">🛡 Protection</span>
+  <label class="sw"><input type="checkbox" id="toggle" checked><span class="sw-track"></span></label>
+</div>
+<div class="divider"></div>
+
+<button class="btn-full-scan" id="btn-full-scan" style="margin-top:12px;">🔍 Scan This Page</button>
+
+<div class="btns">
+  <button class="btn btn-scan" id="btn-scan">🔬 Scan Now</button>
+  <button class="btn btn-clear" id="btn-clear" style="display:none;" title="Clear Highlights">🧹</button>
+  <button class="btn btn-open" id="btn-open">Open App ↗</button>
+</div>
+
+<div class="footer">Powered by Gemini AI · PhishLens v1.0</div>
+
+<script src="popup.js"></script>
+</body>
+</html>

@@ -1,20 +1,14 @@
 {
   "manifest_version": 3,
   "name": "PhishLens",
-  "version": "1.0.0",
-  "description": "Phishing forensics helper for Gmail.",
-  "action": {
-    "default_popup": "popup.html"
-  },
-  "permissions": ["activeTab", "scripting"],
+  "version": "1.0",
+  "description": "One-click phishing forensics on any Gmail email",
+  "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": ["https://mail.google.com/*", "http://localhost:3001/*"],
-  "background": {
-    "service_worker": "background.js"
-  },
-  "content_scripts": [
-    {
-      "matches": ["https://mail.google.com/*"],
-      "js": ["content.js"]
-    }
-  ]
+  "action": { "default_popup": "popup.html", "default_icon": "icon128.png" },
+  "content_scripts": [{
+    "matches": ["https://mail.google.com/*"],
+    "js": ["content.js"]
+  }],
+  "background": { "service_worker": "background.js" }
 }

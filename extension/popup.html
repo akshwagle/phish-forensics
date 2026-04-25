@@ -5,26 +5,107 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PhishLens Extension</title>
     <style>
+      :root {
+        --bg: #0a0e1a;
+        --surface: #131825;
+        --accent: #00d9ff;
+        --warning: #ffaa00;
+        --danger: #ff3b5c;
+        --success: #00ff88;
+        --text: #e8ecf7;
+        --muted: #8f9cb7;
+        --border: #26304a;
+      }
+      * { box-sizing: border-box; }
       body {
-        font-family: Arial, sans-serif;
-        width: 300px;
         margin: 0;
+        width: 360px;
+        max-height: 600px;
+        overflow: auto;
+        background: radial-gradient(circle at top right, #10162a, var(--bg));
+        color: var(--text);
+        font-family: Inter, Arial, sans-serif;
         padding: 12px;
       }
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: rgba(19, 24, 37, 0.95);
+        padding: 10px;
+        margin-bottom: 10px;
+      }
+      h1 { margin: 0; font-size: 18px; }
+      .subtitle { color: var(--muted); margin: 3px 0 0; font-size: 12px; }
+      .badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        margin-top: 8px;
+      }
+      .safe { background: rgba(0,255,136,0.15); color: var(--success); border: 1px solid rgba(0,255,136,0.35); }
+      .suspicious { background: rgba(255,170,0,0.14); color: var(--warning); border: 1px solid rgba(255,170,0,0.35); }
+      .dangerous, .critical { background: rgba(255,59,92,0.14); color: var(--danger); border: 1px solid rgba(255,59,92,0.35); }
+      .gauge-wrap { display: grid; grid-template-columns: 90px 1fr; align-items: center; gap: 8px; }
+      .gauge { width: 84px; height: 84px; position: relative; }
+      .gauge svg { transform: rotate(-90deg); }
+      .gauge-bg, .gauge-fill { fill: none; stroke-width: 8; }
+      .gauge-bg { stroke: #1f2a44; }
+      .gauge-fill { stroke: var(--accent); stroke-linecap: round; stroke-dasharray: 226; stroke-dashoffset: 226; transition: stroke-dashoffset .5s ease; }
+      .gauge-center { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; }
+      .flags { margin: 0; padding-left: 16px; font-size: 12px; }
+      .flags li { margin-bottom: 4px; }
+      .actions { display: grid; gap: 8px; }
       button {
         width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #13223b;
+        color: var(--text);
         padding: 8px;
+        font-weight: 600;
+        cursor: pointer;
       }
-      pre {
-        white-space: pre-wrap;
-        font-size: 12px;
-      }
+      button:hover { border-color: var(--accent); }
+      .muted { color: var(--muted); font-size: 12px; }
+      .hidden { display: none; }
     </style>
   </head>
   <body>
-    <h3>PhishLens</h3>
-    <button id="scanBtn">Scan Current Email</button>
-    <pre id="result">Waiting...</pre>
+    <div class="card">
+      <h1>PhishLens</h1>
+      <p class="subtitle">One-click phishing forensics for Gmail</p>
+      <span id="verdictBadge" class="badge safe">SAFE TO OPEN</span>
+    </div>
+
+    <div class="card gauge-wrap">
+      <div class="gauge">
+        <svg viewBox="0 0 84 84">
+          <circle cx="42" cy="42" r="36" class="gauge-bg"></circle>
+          <circle cx="42" cy="42" r="36" class="gauge-fill" id="riskGauge"></circle>
+        </svg>
+        <div class="gauge-center" id="riskValue">0</div>
+      </div>
+      <div>
+        <strong>Risk Score</strong>
+        <p class="muted" id="scanMeta">No scan yet</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <strong>Top 3 Red Flags</strong>
+      <ul id="topFlags" class="flags">
+        <li>No scan run yet.</li>
+      </ul>
+    </div>
+
+    <div class="card actions">
+      <button id="scanCurrentBtn">Scan current open email</button>
+      <button id="scanPageBtn">Scan this page (inbox mode)</button>
+      <button id="openFullReportBtn">Open full report</button>
+    </div>
+
     <script src="popup.js"></script>
   </body>
 </html>
