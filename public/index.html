@@ -16,7 +16,7 @@
     <div class="app-shell">
       <header class="topbar">
         <div class="brand">
-          <svg class="brand-icon" viewBox="0 0 120 120" aria-hidden="true">
+          <svg class="brand-icon" id="brandIcon" viewBox="0 0 120 120" aria-hidden="true">
             <defs>
               <linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0%" stop-color="#388bfd" />
@@ -102,23 +102,66 @@
 
           <div class="input-footer">
             <div class="progress-track" id="progressTrack" aria-live="polite">Idle</div>
-            <button id="analyzeBtn" class="analyze-btn">ANALYZE EMAIL</button>
+            <button id="analyzeBtn" class="analyze-btn" type="button">
+              <svg class="btn-spinner hidden" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="40 60"></circle>
+              </svg>
+              <span class="btn-label" id="analyzeBtnLabel">ANALYZE EMAIL</span>
+            </button>
           </div>
         </aside>
 
         <!-- RIGHT COLUMN — RESULTS (60%) -->
         <section class="panel results-panel" id="resultsPanel" aria-label="Analysis results">
-          <div id="skeletonState" class="skeleton-state hidden">
-            <div class="skeleton-line lg"></div>
-            <div class="skeleton-line"></div>
-            <div class="skeleton-line"></div>
-            <div class="skeleton-grid">
-              <div class="skeleton-card"></div>
-              <div class="skeleton-card"></div>
-              <div class="skeleton-card"></div>
-              <div class="skeleton-card"></div>
+          <div id="skeletonState" class="loading-state hidden" aria-live="polite" aria-busy="true">
+            <div class="loader-head">
+              <div class="loader-radar" aria-hidden="true">
+                <span class="radar-ring"></span>
+                <span class="radar-ring"></span>
+                <span class="radar-ring"></span>
+                <span class="radar-dot"></span>
+              </div>
+              <div class="loader-titles">
+                <h2>Analyzing email…</h2>
+                <p>Scanning headers, links, and content</p>
+              </div>
             </div>
-            <p class="scan-line">Scanning targets and redirect chains…</p>
+
+            <ol class="loader-steps" id="loaderSteps">
+              <li class="loader-step pending" data-step="0">
+                <span class="step-icon" aria-hidden="true"></span>
+                <span class="step-label">Parsing email headers</span>
+              </li>
+              <li class="loader-step pending" data-step="1">
+                <span class="step-icon" aria-hidden="true"></span>
+                <span class="step-label">Checking sender authentication</span>
+              </li>
+              <li class="loader-step pending" data-step="2">
+                <span class="step-icon" aria-hidden="true"></span>
+                <span class="step-label">Analyzing links and URLs</span>
+              </li>
+              <li class="loader-step pending" data-step="3">
+                <span class="step-icon" aria-hidden="true"></span>
+                <span class="step-label">Running AI threat detection</span>
+              </li>
+              <li class="loader-step pending" data-step="4">
+                <span class="step-icon" aria-hidden="true"></span>
+                <span class="step-label">Generating risk assessment</span>
+              </li>
+            </ol>
+
+            <div class="loader-skeletons" aria-hidden="true">
+              <div class="skeleton skeleton-block skeleton-bars">
+                <div class="skeleton-bar" style="--w:78%"></div>
+                <div class="skeleton-bar" style="--w:62%"></div>
+                <div class="skeleton-bar" style="--w:88%"></div>
+                <div class="skeleton-bar" style="--w:46%"></div>
+                <div class="skeleton-bar" style="--w:70%"></div>
+              </div>
+              <div class="skeleton skeleton-block skeleton-donut">
+                <span class="skeleton-donut-hole"></span>
+              </div>
+            </div>
           </div>
 
           <div id="emptyState" class="empty-state">
@@ -128,8 +171,8 @@
                 <line x1="40" y1="40" x2="56" y2="56" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" />
               </svg>
             </div>
-            <h2>Awaiting forensic input</h2>
-            <p>Paste, upload, or load a sample email and run the analyzer to see the verdict, evidence, and full forensic breakdown here.</p>
+            <h2>Paste an email and click Analyze to begin</h2>
+            <p>Verdict, evidence, charts, and the full forensic breakdown will appear here once analysis completes.</p>
           </div>
 
           <div id="reportRoot" class="report-root hidden">

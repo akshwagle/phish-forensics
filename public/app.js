@@ -120,7 +120,10 @@ const el = {
   trustMeterFill: document.getElementById('trustMeterFill'),
   trustScoreValue: document.getElementById('trustScoreValue'),
   trustBars: document.getElementById('trustBars'),
-  linkCardsList: document.getElementById('linkCardsList')
+  linkCardsList: document.getElementById('linkCardsList'),
+  brandIcon: document.getElementById('brandIcon'),
+  analyzeBtnLabel: document.getElementById('analyzeBtnLabel'),
+  loaderSteps: document.getElementById('loaderSteps')
 };
 
 const charts = { bars: null, donut: null };
@@ -388,8 +391,100 @@ function highlightContent(emailBody, redFlags = []) {
 function revealReport() {
   [...document.querySelectorAll('.reveal-item')].forEach((item, index) => {
     item.classList.remove('show');
+    // re-flow so the animation re-triggers on subsequent renders
+    void item.offsetWidth; // eslint-disable-line no-unused-expressions
     setTimeout(() => item.classList.add('show'), index * 100);
   });
+}
+
+/* ============================================================
+   v2 LOADING STATE — 3-state UI machine + cosmetic step ticker
+   ============================================================ */
+
+const LOADER_STEPS = [
+  'Parsing email headers',
+  'Checking sender authentication',
+  'Analyzing links and URLs',
+  'Running AI threat detection',
+  'Generating risk assessment'
+];
+
+const loader = {
+  intervalId: null,
+  index: 0,
+  stepDuration: 1800
+};
+
+function setStepState(idx, state) {
+  if (!el.loaderSteps) return;
+  const node = el.loaderSteps.querySelector(`.loader-step[data-step="${idx}"]`);
+  if (!node) return;
+  node.classList.remove('pending', 'running', 'done');
+  node.classList.add(state);
+}
+
+function resetLoaderSteps() {
+  if (!el.loaderSteps) return;
+  el.loaderSteps.querySelectorAll('.loader-step').forEach((node) => {
+    node.classList.remove('running', 'done');
+    node.classList.add('pending');
+  });
+}
+
+function stopStepTicker() {
+  if (loader.intervalId) {
+    clearInterval(loader.intervalId);
+    loader.intervalId = null;
+  }
+}
+
+function startStepTicker() {
+  stopStepTicker();
+  resetLoaderSteps();
+  loader.index = 0;
+  setStepState(0, 'running');
+  loader.intervalId = setInterval(() => {
+    setStepState(loader.index, 'done');
+    loader.index += 1;
+    if (loader.index < LOADER_STEPS.length) {
+      setStepState(loader.index, 'running');
+    } else {
+      stopStepTicker();
+    }
+  }, loader.stepDuration);
+}
+
+function markAllStepsComplete() {
+  stopStepTicker();
+  LOADER_STEPS.forEach((_, i) => setStepState(i, 'done'));
+}
+
+function setUiState(state) {
+  const btn = el.analyzeBtn;
+  const spinner = btn ? btn.querySelector('.btn-spinner') : null;
+
+  const apply = (showEmpty, showLoading, showReport, brandScan, btnLoading) => {
+    if (el.emptyState) el.emptyState.classList.toggle('hidden', !showEmpty);
+    if (el.skeletonState) el.skeletonState.classList.toggle('hidden', !showLoading);
+    if (el.reportRoot) el.reportRoot.classList.toggle('hidden', !showReport);
+    if (el.brandIcon) el.brandIcon.classList.toggle('scanning', brandScan);
+    if (btn) {
+      btn.classList.toggle('is-loading', btnLoading);
+      btn.disabled = btnLoading;
+    }
+    if (spinner) spinner.classList.toggle('hidden', !btnLoading);
+    if (el.analyzeBtnLabel) el.analyzeBtnLabel.textContent = btnLoading ? 'Analyzing…' : 'ANALYZE EMAIL';
+  };
+
+  if (state === 'loading') {
+    apply(false, true, false, true, true);
+  } else if (state === 'result') {
+    apply(false, false, true, false, false);
+    stopStepTicker();
+  } else {
+    apply(true, false, false, false, false);
+    stopStepTicker();
+  }
 }
 
 /* ============================================================
@@ -1113,10 +1208,11 @@ async function analyze() {
   appState.analysis = { signals: {} };
   appState.isAnalyzing = true;
 
-  el.progressTrack.textContent = '> Starting forensic pipeline...';
-  el.emptyState.classList.add('hidden');
-  el.reportRoot.classList.add('hidden');
-  el.skeletonState.classList.remove('hidden');
+  setUiState('loading');
+  startStepTicker();
+  el.progressTrack.textContent = '> Starting forensic pipeline…';
+
+  let completePayload = null;
 
   try {
     const response = await fetch(`${API_BASE}/api/analyze`, {
@@ -1132,6 +1228,7 @@ async function analyze() {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let streamError = null;
 
     while (true) {
       // eslint-disable-next-line no-await-in-loop
@@ -1164,23 +1261,33 @@ async function analyze() {
         if (eventName === 'progress') {
           el.progressTrack.textContent = `> ${parsed.message}`;
         } else if (eventName === 'partial') {
+          // Silently fold into state — keep loading UI visible until 'complete'
           mergePartial(parsed.section, parsed.data);
-          renderReport(appState.analysis);
         } else if (eventName === 'complete') {
           appState.analysis = parsed;
-          renderReport(appState.analysis);
-          el.progressTrack.textContent = '> Analysis complete';
+          completePayload = parsed;
         } else if (eventName === 'error') {
-          throw new Error(parsed.error || 'Unknown stream error');
+          streamError = new Error(parsed.error || 'Unknown stream error');
         }
       });
+
+      if (streamError) throw streamError;
     }
+
+    // Stream finished — reveal results in one pass
+    markAllStepsComplete();
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    const finalReport = completePayload || appState.analysis;
+    renderReport(finalReport);
+    setUiState('result');
+    el.progressTrack.textContent = '> Analysis complete';
   } catch (error) {
     el.progressTrack.textContent = `> Error: ${error.message}`;
+    setUiState('idle');
     alert(`Analysis failed: ${error.message}`);
   } finally {
     appState.isAnalyzing = false;
-    el.skeletonState.classList.add('hidden');
   }
 }
 
