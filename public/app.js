@@ -56,8 +56,10 @@ Manage preferences at https://github.com/settings/notifications`
 };
 
 const el = {
-  tabs: [...document.querySelectorAll('.tab')],
+  tabs: [...document.querySelectorAll('.tab-switch .tab')],
   tabContents: [...document.querySelectorAll('.tab-content')],
+  subtabs: [...document.querySelectorAll('.subtab')],
+  subtabContents: [...document.querySelectorAll('.subtab-content')],
   rawEmail: document.getElementById('rawEmail'),
   emlUpload: document.getElementById('emlUpload'),
   uploadMeta: document.getElementById('uploadMeta'),
@@ -72,24 +74,143 @@ const el = {
   gaugeFill: document.getElementById('gaugeFill'),
   severityLabel: document.getElementById('severityLabel'),
   aiSummary: document.getElementById('aiSummary'),
+  confidenceMeta: document.getElementById('confidenceMeta'),
+  detectionSourceMeta: document.getElementById('detectionSourceMeta'),
+  providerMeta: document.getElementById('providerMeta'),
+  recommendCard: document.getElementById('recommendCard'),
+  recommendTitle: document.getElementById('recommendTitle'),
+  recommendDetail: document.getElementById('recommendDetail'),
   redFlagsList: document.getElementById('redFlagsList'),
+  redFlagsEmpty: document.getElementById('redFlagsEmpty'),
+  evidenceSub: document.getElementById('evidenceSub'),
+  overviewBullets: document.getElementById('overviewBullets'),
+  riskFactorsList: document.getElementById('riskFactorsList'),
+  senderKv: document.getElementById('senderKv'),
   urlTableBody: document.getElementById('urlTableBody'),
   senderPanel: document.getElementById('senderPanel'),
   authPills: document.getElementById('authPills'),
+  contentTags: document.getElementById('contentTags'),
   highlightedEmail: document.getElementById('highlightedEmail'),
   wordCloud: document.getElementById('wordCloud'),
   attribution: document.getElementById('attribution'),
   tacticsMatrix: document.getElementById('tacticsMatrix'),
   showReasoningBtn: document.getElementById('showReasoningBtn'),
   reasoningStream: document.getElementById('reasoningStream'),
+  rawJson: document.getElementById('rawJson'),
+  copyJsonBtn: document.getElementById('copyJsonBtn'),
+  reportPhishBtn: document.getElementById('reportPhishBtn'),
+  copySummaryBtn: document.getElementById('copySummaryBtn'),
+  exportJsonBtn: document.getElementById('exportJsonBtn'),
   downloadPdfBtn: document.getElementById('downloadPdfBtn'),
   copyIocsBtn: document.getElementById('copyIocsBtn'),
-  shareAnalysisBtn: document.getElementById('shareAnalysisBtn')
+  shareAnalysisBtn: document.getElementById('shareAnalysisBtn'),
+  themeToggleBtn: document.getElementById('themeToggleBtn'),
+  themeToggleLabel: document.getElementById('themeToggleLabel'),
+  gaugeSubtitle: document.getElementById('gaugeSubtitle'),
+  recommendIcon: document.getElementById('recommendIcon'),
+  recommendActionBtn: document.getElementById('recommendActionBtn'),
+  threatBarsCanvas: document.getElementById('threatBarsChart'),
+  threatBarsEmpty: document.getElementById('threatBarsEmpty'),
+  threatDonutCanvas: document.getElementById('threatDonutChart'),
+  threatDonutLegend: document.getElementById('threatDonutLegend'),
+  evidenceTimeline: document.getElementById('evidenceTimeline'),
+  timelineSub: document.getElementById('timelineSub'),
+  authChips: document.getElementById('authChips'),
+  authVerdict: document.getElementById('authVerdict'),
+  trustMeterFill: document.getElementById('trustMeterFill'),
+  trustScoreValue: document.getElementById('trustScoreValue'),
+  trustBars: document.getElementById('trustBars'),
+  linkCardsList: document.getElementById('linkCardsList')
 };
+
+const charts = { bars: null, donut: null };
+
+/* === THEME TOGGLE ======================================== */
+(function initTheme() {
+  const saved = localStorage.getItem('phishlens-theme');
+  if (saved === 'light') document.body.classList.add('theme-light');
+  updateThemeLabel();
+})();
+
+function updateThemeLabel() {
+  if (!el.themeToggleLabel) return;
+  const isLight = document.body.classList.contains('theme-light');
+  el.themeToggleLabel.textContent = isLight ? 'Dark' : 'Light';
+}
+
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('theme-light');
+  localStorage.setItem('phishlens-theme', isLight ? 'light' : 'dark');
+  updateThemeLabel();
+  if (appState.analysis) {
+    try { renderReport(appState.analysis); } catch (_) { /* noop */ }
+  }
+}
+
+if (el.themeToggleBtn) el.themeToggleBtn.addEventListener('click', toggleTheme);
 
 function setTab(tabId) {
   el.tabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.tab === tabId));
   el.tabContents.forEach((panel) => panel.classList.toggle('active', panel.id === `tab-${tabId}`));
+}
+
+function setSubtab(subId) {
+  el.subtabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.subtab === subId));
+  el.subtabContents.forEach((panel) => panel.classList.toggle('active', panel.id === `sub-${subId}`));
+}
+
+function severityToneFromScore(score) {
+  if (score > 80) return 'critical';
+  if (score > 60) return 'high';
+  if (score > 40) return 'moderate';
+  if (score > 20) return 'low';
+  return 'safe';
+}
+
+function recommendedActionFor(score) {
+  if (score > 80) {
+    return {
+      tone: 'critical',
+      icon: '🔴',
+      title: 'Report and delete immediately',
+      detail: 'Do not click links, open attachments, or reply. Forward to your security team and delete from your inbox.',
+      button: 'Report this email'
+    };
+  }
+  if (score > 60) {
+    return {
+      tone: 'high',
+      icon: '🟠',
+      title: 'Do not click any links',
+      detail: 'Treat this as a high-confidence phishing attempt. Avoid all links and attachments and report it to your IT/security team.',
+      button: 'Report this email'
+    };
+  }
+  if (score > 40) {
+    return {
+      tone: 'moderate',
+      icon: '🟡',
+      title: 'Verify sender before responding',
+      detail: 'Several phishing indicators present. Confirm the sender through a separate, trusted channel before taking any action.',
+      button: 'Verify sender'
+    };
+  }
+  if (score > 20) {
+    return {
+      tone: 'low',
+      icon: '🟡',
+      title: 'Verify sender before acting',
+      detail: 'Some weak phishing signals detected. Take a second look at the sender domain and any links before responding.',
+      button: 'Verify sender'
+    };
+  }
+  return {
+    tone: 'safe',
+    icon: '🟢',
+    title: 'Safe to read and respond',
+    detail: 'No significant phishing signals detected. Standard caution still applies.',
+    button: 'Mark as safe'
+  };
 }
 
 function severityText(score) {
@@ -100,12 +221,39 @@ function severityText(score) {
   return 'SAFE';
 }
 
+/* === SEVERITY PALETTE (Tailwind hues, theme-aware) ====== */
+const SEV_PALETTE_DARK = {
+  safe:     '#22c55e',
+  low:      '#84cc16',
+  moderate: '#f59e0b',
+  high:     '#f97316',
+  critical: '#ef4444',
+  neutral:  '#64748b'
+};
+const SEV_PALETTE_LIGHT = {
+  safe:     '#16a34a',
+  low:      '#65a30d',
+  moderate: '#d97706',
+  high:     '#ea580c',
+  critical: '#dc2626',
+  neutral:  '#475569'
+};
+
+function palette() {
+  return document.body.classList.contains('theme-light') ? SEV_PALETTE_LIGHT : SEV_PALETTE_DARK;
+}
+
 function severityColor(score) {
-  if (score > 80) return '#ff3b5c';
-  if (score > 60) return '#ff6f3b';
-  if (score > 40) return '#ffaa00';
-  if (score > 20) return '#ffd166';
-  return '#00ff88';
+  const p = palette();
+  if (score >= 76) return p.critical;
+  if (score >= 51) return p.high;
+  if (score >= 21) return p.moderate;
+  if (score >= 1)  return p.low;
+  return p.safe;
+}
+
+function severityHexForTone(tone) {
+  return palette()[tone] || palette().neutral;
 }
 
 function animateGauge(targetScore) {
@@ -115,12 +263,17 @@ function animateGauge(targetScore) {
 
   function tick(now) {
     const progress = Math.min(1, (now - started) / duration);
-    const current = Math.round(targetScore * progress);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = Math.round(targetScore * eased);
     const offset = circumference - (circumference * current) / 100;
     el.riskScore.textContent = String(current);
     el.gaugeFill.style.strokeDashoffset = `${offset}`;
+    el.gaugeFill.style.stroke = severityColor(current);
     if (progress < 1) requestAnimationFrame(tick);
   }
+
+  const verdictCard = document.querySelector('.verdict-card');
+  if (verdictCard) verdictCard.classList.toggle('gauge-pulse', targetScore >= 100);
 
   el.gaugeFill.style.stroke = severityColor(targetScore);
   requestAnimationFrame(tick);
@@ -239,6 +392,432 @@ function revealReport() {
   });
 }
 
+/* ============================================================
+   v2 RESULTS PANEL — visual helpers
+   ============================================================ */
+
+const FLAG_WEIGHTS = [
+  { match: /homograph|punycode|lookalike/i, weight: 95 },
+  { match: /typo.?squat/i, weight: 88 },
+  { match: /(corporate|brand).*(impersonat|mismatch|domain)|impersonat/i, weight: 92 },
+  { match: /credential|password|harvest|recruitment.*scam|personal.?data/i, weight: 85 },
+  { match: /attachment|payload|macro/i, weight: 82 },
+  { match: /ip.?as.?domain|raw.?ip/i, weight: 78 },
+  { match: /return.?path|reply-?to.*mismatch|from.*return/i, weight: 75 },
+  { match: /\bspf\b/i, weight: 72 },
+  { match: /\bdkim\b/i, weight: 70 },
+  { match: /\bdmarc\b/i, weight: 70 },
+  { match: /shortener|bit\.ly|tinyurl/i, weight: 65 },
+  { match: /money|wire|transfer|invoice|payment/i, weight: 68 },
+  { match: /threat.?language|fear/i, weight: 62 },
+  { match: /urgency|act.?now|24.?hour/i, weight: 58 },
+  { match: /greed|reward|prize|airdrop/i, weight: 55 },
+  { match: /generic.?greeting/i, weight: 35 },
+  { match: /deceptive|fake.*link|legit.?disguise/i, weight: 65 }
+];
+
+function severityWeightForFlag(label) {
+  const text = String(label || '');
+  for (const { match, weight } of FLAG_WEIGHTS) {
+    if (match.test(text)) return weight;
+  }
+  return 60;
+}
+
+function severityToneFromWeight(weight) {
+  if (weight >= 85) return 'critical';
+  if (weight >= 70) return 'high';
+  if (weight >= 50) return 'moderate';
+  if (weight >= 30) return 'low';
+  return 'safe';
+}
+
+const CATEGORY_RULES = [
+  { name: 'Identity Spoofing',      tone: 'critical', match: /impersonat|spoof|mismatch|display.?name|brand|identity|corporate.*domain/i },
+  { name: 'Authentication Failure', tone: 'high',     match: /\bspf\b|\bdkim\b|\bdmarc\b|return.?path|reply-?to|auth/i },
+  { name: 'Malicious Links',        tone: 'high',     match: /url|link|redirect|homograph|shortener|punycode|hop|ip.?as|brand.?in.?url/i },
+  { name: 'Data Harvesting',        tone: 'critical', match: /credential|password|harvest|personal.?data|resume|recruitment|data.*request/i },
+  { name: 'Social Engineering',     tone: 'moderate', match: /urgenc|threat|greed|reward|prize|fear|act.?now|24.?hour|deceptive|scam|airdrop|generic.?greeting/i },
+  { name: 'Malicious Payload',      tone: 'critical', match: /attachment|macro|payload|executable|\.exe|\.zip/i },
+  { name: 'Money / Wire Fraud',     tone: 'high',     match: /money|wire|transfer|invoice|payment|usd|\$\d/i }
+];
+
+function categorizeFlag(label) {
+  const text = String(label || '');
+  for (const rule of CATEGORY_RULES) {
+    if (rule.match.test(text)) return rule;
+  }
+  return { name: 'Other Indicator', tone: 'low', match: /./ };
+}
+
+function shortLabel(label, max) {
+  const limit = max || 36;
+  const s = String(label || '').replace(/\s+/g, ' ').trim();
+  return s.length > limit ? `${s.slice(0, limit - 1)}…` : s;
+}
+
+function renderGaugeSubtitle(merged, score) {
+  if (!el.gaugeSubtitle) return;
+  const count = Math.min(5, merged.length);
+  if (count === 0) {
+    el.gaugeSubtitle.textContent = score <= 20
+      ? 'No threat signals detected'
+      : 'Low-confidence signals detected';
+    return;
+  }
+  el.gaugeSubtitle.textContent = `${count} of 5 threat signals detected`;
+}
+
+function destroyChart(key) {
+  if (charts[key]) {
+    try { charts[key].destroy(); } catch (_) { /* noop */ }
+    charts[key] = null;
+  }
+}
+
+function renderThreatBars(merged) {
+  if (!el.threatBarsCanvas || typeof Chart === 'undefined') return;
+  destroyChart('bars');
+
+  if (merged.length === 0) {
+    if (el.threatBarsEmpty) el.threatBarsEmpty.classList.remove('hidden');
+    el.threatBarsCanvas.style.display = 'none';
+    return;
+  }
+  if (el.threatBarsEmpty) el.threatBarsEmpty.classList.add('hidden');
+  el.threatBarsCanvas.style.display = 'block';
+
+  const top = merged.slice(0, 5).map((flag) => {
+    const label = typeof flag === 'string' ? flag : flag.label;
+    const weight = severityWeightForFlag(label);
+    const tone = severityToneFromWeight(weight);
+    return { label: shortLabel(label, 38), weight, color: severityHexForTone(tone) };
+  });
+
+  const isLight = document.body.classList.contains('theme-light');
+  const gridColor = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
+  const tickColor = isLight ? '#475569' : '#848d97';
+
+  charts.bars = new Chart(el.threatBarsCanvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: top.map((d) => d.label),
+      datasets: [{
+        data: top.map((d) => d.weight),
+        backgroundColor: top.map((d) => d.color),
+        borderRadius: 6,
+        borderSkipped: false,
+        barThickness: 18,
+        maxBarThickness: 22
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 600, easing: 'easeOutCubic' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: { label: (ctx) => `Severity weight: ${ctx.parsed.x}%` }
+        }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          max: 100,
+          ticks: { color: tickColor, font: { size: 10 }, callback: (v) => `${v}%` },
+          grid: { color: gridColor, drawBorder: false }
+        },
+        y: {
+          ticks: { color: tickColor, font: { size: 11 } },
+          grid: { display: false, drawBorder: false }
+        }
+      }
+    }
+  });
+}
+
+function renderThreatDonut(merged) {
+  if (!el.threatDonutCanvas || typeof Chart === 'undefined') return;
+  destroyChart('donut');
+  if (el.threatDonutLegend) el.threatDonutLegend.innerHTML = '';
+
+  if (merged.length === 0) {
+    el.threatDonutCanvas.style.display = 'none';
+    if (el.threatDonutLegend) {
+      el.threatDonutLegend.innerHTML = '<li><span class="dot" style="background:var(--sev-safe)"></span><span>No category signals</span><span class="pct">—</span></li>';
+    }
+    return;
+  }
+  el.threatDonutCanvas.style.display = 'block';
+
+  const buckets = new Map();
+  merged.forEach((flag) => {
+    const label = typeof flag === 'string' ? flag : flag.label;
+    const cat = categorizeFlag(label);
+    const prev = buckets.get(cat.name) || { name: cat.name, tone: cat.tone, count: 0 };
+    prev.count += 1;
+    buckets.set(cat.name, prev);
+  });
+
+  const items = [...buckets.values()].sort((a, b) => b.count - a.count);
+  const total = items.reduce((sum, i) => sum + i.count, 0) || 1;
+  const colors = items.map((i) => severityHexForTone(i.tone));
+  const isLight = document.body.classList.contains('theme-light');
+
+  charts.donut = new Chart(el.threatDonutCanvas.getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: items.map((i) => i.name),
+      datasets: [{
+        data: items.map((i) => i.count),
+        backgroundColor: colors,
+        borderColor: isLight ? '#ffffff' : '#0d1117',
+        borderWidth: 2,
+        spacing: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '62%',
+      animation: { duration: 600, easing: 'easeOutCubic' },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const pct = Math.round((ctx.parsed / total) * 100);
+              return `${ctx.label}: ${ctx.parsed} (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+
+  if (el.threatDonutLegend) {
+    el.threatDonutLegend.innerHTML = items
+      .map((item, idx) => {
+        const pct = Math.round((item.count / total) * 100);
+        return `<li>
+          <span class="dot" style="background:${colors[idx]}"></span>
+          <span>${escapeHtml(item.name)}</span>
+          <span class="pct">${pct}%</span>
+        </li>`;
+      })
+      .join('');
+  }
+}
+
+function renderEvidenceTimeline(merged) {
+  if (!el.evidenceTimeline) return;
+  if (merged.length === 0) {
+    el.evidenceTimeline.innerHTML = '<li class="timeline-empty">No detected signals to show.</li>';
+    if (el.timelineSub) el.timelineSub.textContent = 'No detected signals';
+    return;
+  }
+  const top = merged.slice(0, 5);
+  if (el.timelineSub) el.timelineSub.textContent = `${top.length} top detected signal${top.length === 1 ? '' : 's'}`;
+
+  const ICONS = { safe: '✓', low: 'i', moderate: '!', high: '!', critical: '✕' };
+  const BADGES = { safe: 'SAFE', low: 'LOW', moderate: 'MED', high: 'HIGH', critical: 'CRIT' };
+
+  el.evidenceTimeline.innerHTML = top
+    .map((flag) => {
+      const label = typeof flag === 'string' ? flag : flag.label;
+      const evidence = (typeof flag === 'object' && flag.evidence) ? flag.evidence : '';
+      const weight = severityWeightForFlag(label);
+      const tone = severityToneFromWeight(weight);
+      const cat = categorizeFlag(label);
+      return `<li class="timeline-item sev-${tone}">
+        <div class="timeline-icon" aria-hidden="true">${ICONS[tone] || '!'}</div>
+        <div class="timeline-body">
+          <strong>${escapeHtml(label)}</strong>
+          <small>${escapeHtml(evidence || `${cat.name} signal — severity weight ${weight}%`)}</small>
+        </div>
+        <span class="timeline-badge">${BADGES[tone] || 'MED'}</span>
+      </li>`;
+    })
+    .join('');
+}
+
+function renderAuthChips(authResults) {
+  if (!el.authChips) return;
+  const auth = authResults || {};
+  const KEYS = ['spf', 'dkim', 'dmarc'];
+  const ICONS = { pass: '✓', fail: '✕', unknown: '?' };
+  const STATUS = { pass: 'PASS', fail: 'FAIL', unknown: 'UNKNOWN' };
+
+  let failCount = 0;
+  let passCount = 0;
+  el.authChips.innerHTML = KEYS.map((k) => {
+    const value = (auth[k] || 'unknown').toLowerCase();
+    const state = value === 'pass' ? 'pass' : value === 'fail' ? 'fail' : 'unknown';
+    if (state === 'fail') failCount += 1;
+    if (state === 'pass') passCount += 1;
+    return `<div class="auth-chip ${state}" title="${k.toUpperCase()} ${STATUS[state]}">
+      <span class="chip-icon">${ICONS[state]}</span>
+      <span class="chip-label">${k.toUpperCase()}</span>
+      <span class="chip-status">${STATUS[state]}</span>
+    </div>`;
+  }).join('');
+
+  if (el.authVerdict) {
+    if (failCount === 3) el.authVerdict.textContent = 'All 3 authentication checks failed';
+    else if (failCount > 0) el.authVerdict.textContent = `${failCount} of 3 authentication check${failCount === 1 ? '' : 's'} failed`;
+    else if (passCount === 3) el.authVerdict.textContent = 'All 3 authentication checks passed';
+    else if (passCount > 0) el.authVerdict.textContent = `${passCount} of 3 authentication check${passCount === 1 ? '' : 's'} passed, ${3 - passCount} unknown`;
+    else el.authVerdict.textContent = 'No authentication results available';
+  }
+}
+
+const TRUSTED_TLDS = new Set(['com', 'org', 'net', 'edu', 'gov', 'io', 'co']);
+const SUSPICIOUS_TLDS = new Set(['top', 'xyz', 'click', 'work', 'tk', 'ml', 'ga', 'cf', 'gq', 'monster', 'rest', 'fit']);
+const FREE_MAIL_DOMAINS = new Set(['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com', 'aol.com']);
+
+function computeSenderTrust(signals) {
+  const header = signals.headerResult || {};
+  const sender = signals.senderResult || {};
+  const auth = header.authResults || {};
+  const fromEmail = String(sender.actualEmail || header.extracted?.from || '').toLowerCase();
+  const domainMatch = fromEmail.match(/@([^>\s]+)/);
+  const domain = domainMatch ? domainMatch[1].trim() : '';
+  const tld = domain.includes('.') ? domain.split('.').pop() : '';
+
+  // Domain age proxy (we don't have real WHOIS — use TLD heuristics + known providers)
+  let domainAge = 60;
+  if (TRUSTED_TLDS.has(tld)) domainAge = 80;
+  if (FREE_MAIL_DOMAINS.has(domain)) domainAge = 90;
+  if (SUSPICIOUS_TLDS.has(tld)) domainAge = 18;
+  if (domain.split('.').length >= 4) domainAge = Math.min(domainAge, 35); // deeply nested
+
+  // Sender match (display vs actual + return-path consistency)
+  let senderMatch = 90;
+  if (sender.mismatch) senderMatch = 25;
+  if (sender.freeEmailImpersonation) senderMatch = 15;
+  const mismatches = Array.isArray(header.mismatches) ? header.mismatches : [];
+  if (mismatches.length) senderMatch = Math.max(10, senderMatch - 25 * mismatches.length);
+
+  // Domain reputation: from auth + suspicious TLD + known phish hints
+  let reputation = 75;
+  if (auth.spf === 'fail') reputation -= 18;
+  if (auth.dkim === 'fail') reputation -= 18;
+  if (auth.dmarc === 'fail') reputation -= 14;
+  if (auth.spf === 'pass' && auth.dkim === 'pass' && auth.dmarc === 'pass') reputation = Math.max(reputation, 92);
+  if (SUSPICIOUS_TLDS.has(tld)) reputation -= 30;
+  if (FREE_MAIL_DOMAINS.has(domain) && sender.freeEmailImpersonation) reputation -= 35;
+  reputation = Math.max(0, Math.min(100, reputation));
+
+  const overall = Math.round((domainAge + senderMatch + reputation) / 3);
+  return {
+    overall,
+    components: [
+      { label: 'Domain Age',        value: domainAge },
+      { label: 'Sender Match',      value: senderMatch },
+      { label: 'Domain Reputation', value: reputation }
+    ]
+  };
+}
+
+function trustToneFromValue(v) {
+  if (v >= 75) return 'safe';
+  if (v >= 55) return 'low';
+  if (v >= 35) return 'moderate';
+  if (v >= 20) return 'high';
+  return 'critical';
+}
+
+function renderSenderTrust(signals) {
+  if (!el.trustMeterFill || !el.trustBars) return;
+  const trust = computeSenderTrust(signals);
+  const tone = trustToneFromValue(trust.overall);
+  const color = severityHexForTone(tone);
+
+  setTimeout(() => {
+    el.trustMeterFill.style.width = `${trust.overall}%`;
+    el.trustMeterFill.style.background = color;
+  }, 50);
+  if (el.trustScoreValue) el.trustScoreValue.textContent = `${trust.overall} / 100`;
+
+  el.trustBars.innerHTML = trust.components
+    .map((c) => {
+      const t = trustToneFromValue(c.value);
+      const fillColor = severityHexForTone(t);
+      return `<li class="trust-bar">
+        <span class="label">${escapeHtml(c.label)}</span>
+        <div class="track"><div class="fill" style="width:${c.value}%; background:${fillColor};"></div></div>
+        <span class="pct">${c.value}</span>
+      </li>`;
+    })
+    .join('');
+}
+
+function classifyLink(entry) {
+  const flags = (entry.flags || []).map((f) => String(f).toLowerCase());
+  const isHomograph = !!entry.homograph?.isHomograph;
+  const hops = entry.hops?.length || 0;
+  const dangerous = flags.some((f) => /credential|brand|ip|homograph|punycode|impersonat|suspicious|malicious/.test(f));
+  const tracking  = flags.some((f) => /tracking|utm|analytic/.test(f));
+  const redirect  = hops > 1 || flags.some((f) => /redirect|shortener|bit\.ly|tinyurl/.test(f));
+
+  let tone = 'safe';
+  if (isHomograph || dangerous) tone = 'critical';
+  else if (redirect) tone = 'moderate';
+  else if (tracking) tone = 'low';
+
+  const chips = [];
+  if (isHomograph) chips.push({ label: 'HOMOGRAPH', cls: 'homograph' });
+  if (dangerous)   chips.push({ label: 'SUSPICIOUS', cls: 'danger' });
+  if (redirect)    chips.push({ label: 'REDIRECT',   cls: 'redirect' });
+  if (tracking)    chips.push({ label: 'TRACKING',   cls: 'tracking' });
+  if (chips.length === 0) chips.push({ label: 'CLEAN', cls: 'safe' });
+
+  return { tone, chips, hops, isHomograph };
+}
+
+function renderLinkCards(urls) {
+  if (!el.linkCardsList) return;
+  if (!urls || urls.length === 0) {
+    el.linkCardsList.innerHTML = '<p class="muted small">No links found in this email.</p>';
+    return;
+  }
+
+  el.linkCardsList.innerHTML = urls
+    .map((entry) => {
+      let host = 'unknown-host';
+      let destHost = '';
+      try { host = new URL(entry.original).hostname; } catch (_) { /* keep default */ }
+      try { destHost = new URL(entry.finalDestination || entry.original).hostname; } catch (_) { /* noop */ }
+
+      const meta = classifyLink(entry);
+      const looksLike = entry.homograph?.normalized;
+      const original = entry.original || '';
+      const dest = entry.finalDestination || original;
+
+      return `<article class="link-card sev-${meta.tone}">
+        <div class="link-row">
+          <div>
+            <div class="link-host">${escapeHtml(host)}</div>
+            <div class="link-original">${escapeHtml(shortLabel(original, 80))}</div>
+          </div>
+          <span class="hops-badge">${meta.hops} hop${meta.hops === 1 ? '' : 's'}</span>
+        </div>
+        <div class="link-row">
+          <div class="destination">
+            <span class="arrow">→</span> ${escapeHtml(destHost || dest)}
+          </div>
+        </div>
+        <div class="link-flags">
+          ${meta.chips.map((c) => `<span class="link-flag ${c.cls}">${c.label}</span>`).join('')}
+          ${meta.isHomograph && looksLike ? `<span class="link-flag homograph">LOOKS LIKE: ${escapeHtml(looksLike)}</span>` : ''}
+        </div>
+      </article>`;
+    })
+    .join('');
+}
+
 function typewriter(text, target) {
   target.classList.remove('hidden');
   target.textContent = '';
@@ -266,6 +845,13 @@ function renderReport(report) {
   el.emptyState.classList.add('hidden');
   el.reportRoot.classList.remove('hidden');
 
+  const tone = severityToneFromScore(score);
+  const verdictCard = document.querySelector('.verdict-card');
+  if (verdictCard) {
+    verdictCard.classList.remove('verdict--safe', 'verdict--low', 'verdict--moderate', 'verdict--high', 'verdict--critical');
+    verdictCard.classList.add(`verdict--${tone}`);
+  }
+
   el.severityLabel.textContent = severityText(score);
   const displaySummary =
     data.ai?.summary && data.ai.summary.trim().length > 0
@@ -273,6 +859,36 @@ function renderReport(report) {
       : 'Analysis complete. No specific threats detected.';
   el.aiSummary.textContent = displaySummary;
   animateGauge(score);
+
+  if (el.confidenceMeta) {
+    const conf = Number(ai.confidenceScore);
+    el.confidenceMeta.textContent = `Confidence: ${Number.isFinite(conf) && conf > 0 ? `${conf}%` : '—'}`;
+  }
+  if (el.detectionSourceMeta) {
+    const ruleS = Number(risk.ruleScore) || 0;
+    const aiS = Number(ai.risk_score) || 0;
+    let source = 'Rule + AI';
+    if (aiS && !ruleS) source = 'AI';
+    else if (ruleS && !aiS) source = 'Rule';
+    else if (!aiS && !ruleS) source = '—';
+    el.detectionSourceMeta.textContent = `Source: ${source}`;
+  }
+  if (el.providerMeta) {
+    el.providerMeta.textContent = `Provider: ${ai.provider || '—'}${ai.model ? ` · ${ai.model}` : ''}`;
+  }
+
+  if (el.recommendCard) {
+    const action = recommendedActionFor(score);
+    el.recommendCard.classList.remove('tone-safe', 'tone-low', 'tone-moderate', 'tone-high', 'tone-critical');
+    el.recommendCard.classList.add(`tone-${action.tone}`);
+    if (el.recommendTitle) el.recommendTitle.textContent = action.title;
+    if (el.recommendDetail) el.recommendDetail.textContent = action.detail;
+    if (el.recommendIcon) el.recommendIcon.textContent = action.icon;
+    if (el.recommendActionBtn) {
+      el.recommendActionBtn.textContent = action.button;
+      el.recommendActionBtn.dataset.tone = action.tone;
+    }
+  }
 
   const aiFlags = Array.isArray(ai.red_flags) ? ai.red_flags : [];
   const ruleReasons = (risk.topReasons || []).map((reason) => ({ label: reason, evidence: '' }));
@@ -286,8 +902,26 @@ function renderReport(report) {
     merged.push(flag);
   });
 
-  el.redFlagsList.innerHTML = '';
-  merged.slice(0, 6).forEach((flag, idx) => el.redFlagsList.appendChild(createFlagCard(flag, idx)));
+  // Legacy structured list (hidden; preserved for any downstream consumers)
+  if (el.redFlagsList) {
+    el.redFlagsList.innerHTML = '';
+    merged.slice(0, 5).forEach((flag, idx) => {
+      const card = createFlagCard(flag, idx);
+      card.classList.add(`sev-${tone}`);
+      el.redFlagsList.appendChild(card);
+    });
+  }
+  if (el.redFlagsEmpty) el.redFlagsEmpty.classList.toggle('hidden', merged.length !== 0);
+  if (el.evidenceSub) {
+    el.evidenceSub.textContent = merged.length === 0
+      ? 'No red flags detected'
+      : `${Math.min(merged.length, 5)} of 5 strongest red flag${merged.length === 1 ? '' : 's'}`;
+  }
+
+  renderGaugeSubtitle(merged, score);
+  renderThreatBars(merged);
+  renderThreatDonut(merged);
+  renderEvidenceTimeline(merged);
 
   const homographMap = new Map((signals.homographResult?.domains || []).map((item) => [item.domain, item.result]));
   const enrichedUrls = (signals.urlResult?.urls || []).map((entry) => {
@@ -300,23 +934,79 @@ function renderReport(report) {
   });
 
   renderUrlTable(enrichedUrls);
+  renderLinkCards(enrichedUrls);
 
   const header = signals.headerResult || {};
   const sender = signals.senderResult || {};
-  el.senderPanel.textContent = [
-    `From: ${header.extracted?.from || 'n/a'}`,
-    `Reply-To: ${header.extracted?.replyTo || 'n/a'}`,
-    `Return-Path: ${header.extracted?.returnPath || 'n/a'}`,
-    `Display Name: ${sender.displayName || 'n/a'}`,
-    `Actual Email: ${sender.actualEmail || 'n/a'}`,
-    `Mismatch: ${sender.mismatch ? 'YES' : 'No'}`,
-    `Hop Count: ${header.hopCount || 0}`,
-    `Origin IP: ${header.originIP || 'n/a'}`
-  ].join('\n');
+
+  if (el.senderKv) {
+    el.senderKv.innerHTML = '';
+    const senderRows = [
+      ['From', header.extracted?.from || sender.displayName || 'n/a'],
+      ['Actual email', sender.actualEmail || 'n/a'],
+      ['Reply-To', header.extracted?.replyTo || 'n/a', header.mismatches?.some?.((m) => m.type === 'reply_to_vs_from') ? 'warn' : ''],
+      ['Return-Path', header.extracted?.returnPath || 'n/a', header.mismatches?.some?.((m) => m.type === 'from_vs_return_path_domain') ? 'danger' : ''],
+      ['Originating IP', header.originIP || 'n/a'],
+      ['Hop count', String(header.hopCount || 0)],
+      ['Display vs domain', sender.mismatch ? 'MISMATCH — possible spoof' : 'consistent', sender.mismatch ? 'danger' : 'ok'],
+      ['Free-mail impersonation', sender.freeEmailImpersonation ? 'YES' : 'No', sender.freeEmailImpersonation ? 'danger' : 'ok']
+    ];
+    senderRows.forEach(([label, value, tone]) => {
+      const labelEl = document.createElement('div');
+      labelEl.className = 'kv-label';
+      labelEl.textContent = label;
+      const valueEl = document.createElement('div');
+      valueEl.className = `kv-value${tone ? ` ${tone}` : ''}`;
+      valueEl.textContent = value;
+      el.senderKv.appendChild(labelEl);
+      el.senderKv.appendChild(valueEl);
+    });
+  }
+
+  if (el.senderPanel) {
+    el.senderPanel.textContent = [
+      `From: ${header.extracted?.from || 'n/a'}`,
+      `Reply-To: ${header.extracted?.replyTo || 'n/a'}`,
+      `Return-Path: ${header.extracted?.returnPath || 'n/a'}`,
+      `Display Name: ${sender.displayName || 'n/a'}`,
+      `Actual Email: ${sender.actualEmail || 'n/a'}`,
+      `Mismatch: ${sender.mismatch ? 'YES' : 'No'}`,
+      `Hop Count: ${header.hopCount || 0}`,
+      `Origin IP: ${header.originIP || 'n/a'}`
+    ].join('\n');
+  }
 
   renderAuthPills(header.authResults || {});
+  renderAuthChips(header.authResults || {});
+  renderSenderTrust(signals);
 
   const contentResult = signals.contentResult || {};
+
+  if (el.contentTags) {
+    el.contentTags.innerHTML = '';
+    const contentSignals = [
+      { label: 'Urgency', active: (contentResult.urgencyScore || 0) > 0, tone: 'warn' },
+      { label: 'Threat language', active: (contentResult.threatScore || 0) > 0, tone: 'danger' },
+      { label: 'Greed/reward', active: (contentResult.greedScore || 0) > 0, tone: 'warn' },
+      { label: 'Credential request', active: !!contentResult.credentialRequest, tone: 'danger' },
+      { label: 'Generic greeting', active: !!contentResult.genericGreeting, tone: 'warn' },
+      { label: 'Money request', active: /wire|transfer|payment|invoice|usd|\$\d/i.test(appState.currentEmail), tone: 'warn' }
+    ];
+    contentSignals.forEach((s) => {
+      if (!s.active) return;
+      const badge = document.createElement('span');
+      badge.className = `badge ${s.tone}`;
+      badge.textContent = s.label;
+      el.contentTags.appendChild(badge);
+    });
+    if (!el.contentTags.children.length) {
+      const ok = document.createElement('span');
+      ok.className = 'badge ok';
+      ok.textContent = 'No content red flags';
+      el.contentTags.appendChild(ok);
+    }
+  }
+
   el.highlightedEmail.innerHTML = highlightContent(appState.currentEmail, contentResult.redFlags || []);
   renderWordCloud(contentResult.redFlags || []);
 
@@ -335,6 +1025,63 @@ function renderReport(report) {
     ['Collection', /invoice|account|login|wire/i.test(appState.currentEmail) ? 'Likely' : 'Unknown']
   ];
   el.tacticsMatrix.innerHTML = matrixRows.map((row) => `<tr><td>${row[0]}</td><td>${row[1]}</td></tr>`).join('');
+
+  if (el.overviewBullets) {
+    const urlCount = (signals.urlResult?.urls || []).length;
+    const auth = header.authResults || {};
+    const bullets = [];
+    bullets.push({
+      tone: tone === 'safe' ? 'ok' : tone === 'critical' || tone === 'high' ? 'danger' : 'warn',
+      text: `${severityText(score)} verdict (score ${score} / 100)`
+    });
+    bullets.push({ tone: '', text: `${urlCount} link${urlCount === 1 ? '' : 's'} extracted from email body` });
+    bullets.push({
+      tone: sender.mismatch || sender.freeEmailImpersonation ? 'danger' : 'ok',
+      text: sender.mismatch || sender.freeEmailImpersonation ? 'Sender identity inconsistent with claimed brand' : 'Sender identity looks internally consistent'
+    });
+    bullets.push({
+      tone: auth.spf === 'fail' || auth.dkim === 'fail' || auth.dmarc === 'fail' ? 'danger' : auth.spf === 'pass' ? 'ok' : 'warn',
+      text: `Authentication: SPF ${auth.spf || 'unknown'}, DKIM ${auth.dkim || 'unknown'}, DMARC ${auth.dmarc || 'unknown'}`
+    });
+    if (ai.attackType && ai.attackType !== 'other') {
+      bullets.push({ tone: '', text: `AI attack profile: ${ai.attackType} (${ai.sophistication || 'unknown'} sophistication)` });
+    }
+    el.overviewBullets.innerHTML = '';
+    bullets.forEach((b) => {
+      const li = document.createElement('li');
+      if (b.tone) li.className = b.tone;
+      li.textContent = b.text;
+      el.overviewBullets.appendChild(li);
+    });
+  }
+
+  if (el.riskFactorsList) {
+    el.riskFactorsList.innerHTML = '';
+    const factors = merged.slice(0, 8);
+    if (factors.length === 0) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.textContent = 'No specific risk factors identified.';
+      el.riskFactorsList.appendChild(li);
+    } else {
+      factors.forEach((flag) => {
+        const li = document.createElement('li');
+        li.className = tone === 'safe' ? '' : tone === 'critical' || tone === 'high' ? 'danger' : 'warn';
+        const label = typeof flag === 'string' ? flag : flag.label;
+        const evidence = typeof flag === 'object' && flag.evidence ? ` — ${flag.evidence}` : '';
+        li.textContent = `${label}${evidence}`;
+        el.riskFactorsList.appendChild(li);
+      });
+    }
+  }
+
+  if (el.rawJson) {
+    try {
+      el.rawJson.textContent = JSON.stringify(data, null, 2);
+    } catch (_) {
+      el.rawJson.textContent = '{ "error": "Could not serialize report" }';
+    }
+  }
 
   revealReport();
 }
@@ -536,7 +1283,55 @@ function shareAnalysis() {
   alert(`Share link copied: ${link}`);
 }
 
+function copySummary() {
+  if (!appState.analysis) {
+    alert('Run analysis first.');
+    return;
+  }
+  const score = Math.max(0, Math.min(100, appState.analysis.risk?.score || 0));
+  const verdict = severityText(score);
+  const summary = appState.analysis.ai?.summary || 'No summary available.';
+  const text = `PhishLens Verdict: ${verdict} (${score}/100)\n\n${summary}`;
+  navigator.clipboard.writeText(text);
+  alert('Summary copied to clipboard.');
+}
+
+function exportJson() {
+  if (!appState.analysis) {
+    alert('Run analysis first.');
+    return;
+  }
+  const blob = new Blob([JSON.stringify(appState.analysis, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `PhishLens_Report_${Date.now()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function copyJson() {
+  if (!appState.analysis) {
+    alert('Run analysis first.');
+    return;
+  }
+  navigator.clipboard.writeText(JSON.stringify(appState.analysis, null, 2));
+  alert('Report JSON copied to clipboard.');
+}
+
+function reportPhish() {
+  if (!appState.analysis) {
+    alert('Run analysis first.');
+    return;
+  }
+  const score = Math.max(0, Math.min(100, appState.analysis.risk?.score || 0));
+  alert(`Reported as phishing (verdict: ${severityText(score)} ${score}/100). In a production deployment this would forward the IOCs to your SOC pipeline.`);
+}
+
 el.tabs.forEach((tab) => tab.addEventListener('click', () => setTab(tab.dataset.tab)));
+el.subtabs.forEach((tab) => tab.addEventListener('click', () => setSubtab(tab.dataset.subtab)));
 el.loadSampleBtn.addEventListener('click', () => {
   el.rawEmail.value = samples[el.samplePicker.value];
   setTab('paste');
@@ -553,10 +1348,32 @@ el.emlUpload.addEventListener('change', async (event) => {
 });
 
 el.analyzeBtn.addEventListener('click', analyze);
-el.showReasoningBtn.addEventListener('click', streamReasoning);
-el.downloadPdfBtn.addEventListener('click', downloadPdf);
-el.copyIocsBtn.addEventListener('click', copyIocs);
-el.shareAnalysisBtn.addEventListener('click', shareAnalysis);
+if (el.showReasoningBtn) el.showReasoningBtn.addEventListener('click', streamReasoning);
+if (el.downloadPdfBtn) el.downloadPdfBtn.addEventListener('click', downloadPdf);
+if (el.copyIocsBtn) el.copyIocsBtn.addEventListener('click', copyIocs);
+if (el.shareAnalysisBtn) el.shareAnalysisBtn.addEventListener('click', shareAnalysis);
+if (el.copySummaryBtn) el.copySummaryBtn.addEventListener('click', copySummary);
+if (el.exportJsonBtn) el.exportJsonBtn.addEventListener('click', exportJson);
+if (el.copyJsonBtn) el.copyJsonBtn.addEventListener('click', copyJson);
+if (el.reportPhishBtn) el.reportPhishBtn.addEventListener('click', reportPhish);
+
+if (el.recommendActionBtn) {
+  el.recommendActionBtn.addEventListener('click', () => {
+    if (!appState.analysis) {
+      alert('Run analysis first.');
+      return;
+    }
+    const tone = el.recommendActionBtn.dataset.tone;
+    if (tone === 'safe') {
+      alert('Marked as safe. Standard caution still applies.');
+    } else if (tone === 'low' || tone === 'moderate') {
+      const sender = appState.analysis.signals?.headerResult?.extracted?.from || 'sender';
+      alert(`Verify ${sender} through a separate, trusted channel before responding.`);
+    } else {
+      reportPhish();
+    }
+  });
+}
 
 const params = new URLSearchParams(window.location.search);
 const prefill = params.get('prefill');

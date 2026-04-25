@@ -2,12 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>PhishLens | Forensic Email Analysis</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
@@ -19,55 +19,80 @@
           <svg class="brand-icon" viewBox="0 0 120 120" aria-hidden="true">
             <defs>
               <linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#00d9ff" />
-                <stop offset="100%" stop-color="#00ff88" />
+                <stop offset="0%" stop-color="#388bfd" />
+                <stop offset="100%" stop-color="#58a6ff" />
               </linearGradient>
             </defs>
             <circle cx="48" cy="46" r="26" fill="none" stroke="url(#brandGrad)" stroke-width="7" />
             <line x1="66" y1="64" x2="96" y2="94" stroke="url(#brandGrad)" stroke-width="8" stroke-linecap="round" />
-            <path d="M22 36 L48 54 L74 36 V74 H22 Z" fill="#131825" stroke="#00d9ff" stroke-width="4" />
-            <path d="M48 54 L48 76" stroke="#ff3b5c" stroke-width="5" />
-            <path d="M42 76 C42 88, 54 88, 54 96" stroke="#ff3b5c" stroke-width="5" fill="none" />
+            <path d="M22 36 L48 54 L74 36 V74 H22 Z" fill="none" stroke="#388bfd" stroke-width="4" />
+            <path d="M48 54 L48 76" stroke="#cf222e" stroke-width="5" />
+            <path d="M42 76 C42 88, 54 88, 54 96" stroke="#cf222e" stroke-width="5" fill="none" />
           </svg>
           <div>
             <h1>PhishLens</h1>
-            <p>Forensic email analysis in seconds</p>
+            <p>Forensic email analysis dashboard</p>
           </div>
         </div>
-        <div class="model-status" id="modelStatus">
-          <span class="status-dot"></span>
-          <span>AI online</span>
+        <div class="topbar-meta">
+          <div class="model-status" id="modelStatus">
+            <span class="status-dot"></span>
+            <span>AI online</span>
+          </div>
+          <button class="theme-toggle" id="themeToggleBtn" title="Toggle theme" aria-label="Toggle Evidence Desk light theme">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="5"/>
+              <line x1="12" y1="1" x2="12" y2="3"/>
+              <line x1="12" y1="21" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+              <line x1="1" y1="12" x2="3" y2="12"/>
+              <line x1="21" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+            <span id="themeToggleLabel">Light</span>
+          </button>
         </div>
       </header>
 
-      <main class="main-grid">
-        <section class="panel input-panel">
+      <main class="workspace">
+        <!-- LEFT COLUMN — INPUT (40%) -->
+        <aside class="panel input-panel" aria-label="Email input">
+          <div class="panel-head">
+            <h2 class="panel-title">Input</h2>
+            <span class="panel-sub">Paste, upload, or load a sample</span>
+          </div>
+
           <div class="tab-switch" role="tablist" aria-label="Input source tabs">
-            <button class="tab active" data-tab="paste">Paste Email</button>
-            <button class="tab" data-tab="upload">Upload .eml</button>
-            <button class="tab" data-tab="sample">Try Sample</button>
+            <button class="tab active" data-tab="paste" role="tab">Paste</button>
+            <button class="tab" data-tab="upload" role="tab">Upload .eml</button>
+            <button class="tab" data-tab="sample" role="tab">Sample</button>
           </div>
 
           <div class="tab-content active" id="tab-paste">
-            <label for="rawEmail">Raw email (headers + body)</label>
             <textarea
               id="rawEmail"
               class="forensic-input"
+              spellcheck="false"
               placeholder="From: PayPal Security <alerts@security-paypal-check.com>&#10;Reply-To: support@bitly-secure-check.net&#10;Return-Path: bounce@mailer-payment-alert.top&#10;Authentication-Results: spf=fail dkim=fail dmarc=fail&#10;Received: from unknown (185.244.25.44)&#10;&#10;Dear Customer,&#10;Your account is suspended. Verify within 24 hours: https://bit.ly/verify-now"
             ></textarea>
+            <p class="hint">Headers + body. Raw RFC822 works best.</p>
           </div>
 
           <div class="tab-content" id="tab-upload">
-            <label for="emlUpload">Upload .eml file</label>
-            <input id="emlUpload" type="file" accept=".eml,message/rfc822,.txt" />
-            <p class="hint" id="uploadMeta">No file selected.</p>
+            <label class="file-drop" for="emlUpload">
+              <span class="file-drop-title">Drop .eml file here or click to browse</span>
+              <span class="file-drop-sub" id="uploadMeta">No file selected.</span>
+              <input id="emlUpload" type="file" accept=".eml,message/rfc822,.txt" />
+            </label>
           </div>
 
           <div class="tab-content" id="tab-sample">
-            <label for="samplePicker">Sample scenarios</label>
+            <label for="samplePicker" class="field-label">Sample scenario</label>
             <select id="samplePicker">
               <option value="paypal">PayPal Account Suspended</option>
-              <option value="bec">CEO Wire Transfer</option>
+              <option value="bec">CEO Wire Transfer (BEC)</option>
               <option value="m365">Microsoft 365 Login</option>
               <option value="crypto">Crypto Airdrop Scam</option>
               <option value="newsletter">Legitimate Newsletter</option>
@@ -75,12 +100,14 @@
             <button id="loadSampleBtn" class="ghost-btn">Load Sample into Editor</button>
           </div>
 
-          <button id="analyzeBtn" class="analyze-btn">ANALYZE</button>
+          <div class="input-footer">
+            <div class="progress-track" id="progressTrack" aria-live="polite">Idle</div>
+            <button id="analyzeBtn" class="analyze-btn">ANALYZE EMAIL</button>
+          </div>
+        </aside>
 
-          <div class="progress-track" id="progressTrack" aria-live="polite"></div>
-        </section>
-
-        <section class="panel results-panel" id="resultsPanel">
+        <!-- RIGHT COLUMN — RESULTS (60%) -->
+        <section class="panel results-panel" id="resultsPanel" aria-label="Analysis results">
           <div id="skeletonState" class="skeleton-state hidden">
             <div class="skeleton-line lg"></div>
             <div class="skeleton-line"></div>
@@ -91,106 +118,265 @@
               <div class="skeleton-card"></div>
               <div class="skeleton-card"></div>
             </div>
-            <p class="scan-line">Scanning targets and redirect chains...</p>
+            <p class="scan-line">Scanning targets and redirect chains…</p>
           </div>
 
           <div id="emptyState" class="empty-state">
-            <h2>Awaiting Forensic Input</h2>
-            <p>Paste or upload an email to generate a full incident-grade phishing report.</p>
+            <div class="empty-icon" aria-hidden="true">
+              <svg viewBox="0 0 64 64" width="64" height="64">
+                <circle cx="26" cy="26" r="18" fill="none" stroke="currentColor" stroke-width="2.5" />
+                <line x1="40" y1="40" x2="56" y2="56" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" />
+              </svg>
+            </div>
+            <h2>Awaiting forensic input</h2>
+            <p>Paste, upload, or load a sample email and run the analyzer to see the verdict, evidence, and full forensic breakdown here.</p>
           </div>
 
           <div id="reportRoot" class="report-root hidden">
-            <section class="report-section risk-hero reveal-item">
-              <div class="gauge-wrap">
-                <svg class="gauge" viewBox="0 0 220 220">
-                  <circle cx="110" cy="110" r="88" class="gauge-bg"></circle>
-                  <circle cx="110" cy="110" r="88" class="gauge-fill" id="gaugeFill"></circle>
-                </svg>
-                <div class="gauge-center">
-                  <div id="riskScore">0</div>
-                  <span>risk score</span>
+            <!-- 1. VERDICT HERO -->
+            <section class="verdict-card reveal-item" aria-label="Verdict summary">
+              <div class="verdict-left">
+                <div class="gauge-wrap">
+                  <svg class="gauge" viewBox="0 0 220 220" aria-hidden="true">
+                    <circle cx="110" cy="110" r="88" class="gauge-bg"></circle>
+                    <circle cx="110" cy="110" r="88" class="gauge-fill" id="gaugeFill"></circle>
+                  </svg>
+                  <div class="gauge-center">
+                    <div id="riskScore">0</div>
+                    <span>/ 100</span>
+                  </div>
+                </div>
+                <div class="gauge-subtitle" id="gaugeSubtitle">0 of 5 threat signals detected</div>
+              </div>
+              <div class="verdict-right">
+                <div class="verdict-head">
+                  <span class="verdict-eyebrow">Verdict</span>
+                  <h2 id="severityLabel">SAFE</h2>
+                </div>
+                <p id="aiSummary" class="verdict-summary">No analysis yet.</p>
+                <div class="verdict-meta">
+                  <span class="meta-chip" id="confidenceMeta">Confidence: —</span>
+                  <span class="meta-chip" id="detectionSourceMeta">Source: —</span>
+                  <span class="meta-chip" id="providerMeta">Provider: —</span>
+                </div>
+                <div class="verdict-actions">
+                  <button id="reportPhishBtn" class="action-btn danger">Report</button>
+                  <button id="copySummaryBtn" class="action-btn">Copy Summary</button>
+                  <button id="exportJsonBtn" class="action-btn">Export JSON</button>
                 </div>
               </div>
-              <div class="hero-meta">
-                <h2 id="severityLabel">SAFE</h2>
-                <p id="aiSummary">No analysis yet.</p>
+            </section>
+
+            <!-- 2. RECOMMENDED ACTION -->
+            <section class="recommend-card reveal-item" id="recommendCard" aria-label="Recommended action">
+              <div class="recommend-icon" id="recommendIcon" aria-hidden="true">!</div>
+              <div class="recommend-body">
+                <span class="recommend-eyebrow">Recommended action</span>
+                <strong id="recommendTitle">Awaiting analysis</strong>
+                <p id="recommendDetail" class="recommend-detail">
+                  Run the analyzer to receive a tailored response recommendation.
+                </p>
+              </div>
+              <div class="recommend-cta">
+                <button id="recommendActionBtn" class="recommend-action">Run analysis</button>
               </div>
             </section>
 
-            <section class="report-section reveal-item">
-              <h3>Top 5 Red Flags</h3>
-              <div id="redFlagsList" class="red-flag-list"></div>
+            <!-- 3. THREAT SIGNALS (bars + donut) -->
+            <section class="evidence-section reveal-item" aria-label="Threat signals">
+              <div class="section-head">
+                <h3>Threat Signals</h3>
+                <span class="section-sub" id="evidenceSub">Awaiting analysis</span>
+              </div>
+
+              <div class="threat-grid">
+                <div class="threat-block">
+                  <div class="block-head">
+                    <h4>Strongest signals</h4>
+                    <span class="block-sub">Severity weight per detection</span>
+                  </div>
+                  <div class="chart-wrap chart-bars">
+                    <canvas id="threatBarsChart"></canvas>
+                  </div>
+                  <p id="threatBarsEmpty" class="evidence-empty hidden">
+                    No red flags detected. The email looks clean against current signals.
+                  </p>
+                </div>
+
+                <div class="threat-block">
+                  <div class="block-head">
+                    <h4>Composition</h4>
+                    <span class="block-sub">How threats break down</span>
+                  </div>
+                  <div class="chart-wrap chart-donut">
+                    <canvas id="threatDonutChart"></canvas>
+                  </div>
+                  <ul id="threatDonutLegend" class="donut-legend"></ul>
+                </div>
+              </div>
+
+              <!-- legacy structured list (hidden) — keeps existing renderers working -->
+              <div id="redFlagsList" class="red-flag-list legacy-evidence" hidden></div>
+              <p id="redFlagsEmpty" class="evidence-empty hidden">
+                No red flags detected. The email appears clean against current signals.
+              </p>
             </section>
 
-            <section class="report-section reveal-item">
-              <h3>URL Forensics</h3>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Original</th>
-                      <th>Destination</th>
-                      <th>Hops</th>
-                      <th>Flags</th>
-                      <th>Homograph</th>
-                    </tr>
-                  </thead>
-                  <tbody id="urlTableBody"></tbody>
-                </table>
+            <!-- 4. EVIDENCE TIMELINE -->
+            <section class="evidence-section reveal-item" aria-label="Evidence timeline">
+              <div class="section-head">
+                <h3>Evidence Timeline</h3>
+                <span class="section-sub" id="timelineSub">Top detected signals in order of severity</span>
               </div>
+              <ol id="evidenceTimeline" class="evidence-timeline">
+                <li class="timeline-empty">Run the analyzer to populate the timeline.</li>
+              </ol>
             </section>
 
-            <section class="report-section reveal-item sender-grid">
-              <div>
-                <h3>Sender Analysis</h3>
-                <div id="senderPanel" class="code-box"></div>
+            <!-- 4. FORENSIC DETAIL TABS -->
+            <section class="forensic-section reveal-item" aria-label="Forensic detail">
+              <div class="subtab-bar" role="tablist" aria-label="Forensic detail tabs">
+                <button class="subtab active" data-subtab="overview" role="tab">Overview</button>
+                <button class="subtab" data-subtab="sender" role="tab">Sender Identity</button>
+                <button class="subtab" data-subtab="links" role="tab">Links</button>
+                <button class="subtab" data-subtab="content" role="tab">Content</button>
+                <button class="subtab" data-subtab="attribution" role="tab">Attribution</button>
+                <button class="subtab" data-subtab="json" role="tab">Raw JSON</button>
               </div>
-              <div>
-                <h3>Auth Results</h3>
-                <div id="authPills" class="pill-row"></div>
-              </div>
-            </section>
 
-            <section class="report-section reveal-item">
-              <h3>Content Forensics</h3>
-              <div id="highlightedEmail" class="code-box"></div>
-              <div id="wordCloud" class="word-cloud"></div>
-            </section>
-
-            <section class="report-section reveal-item attribution-grid">
-              <div>
-                <h3>Attack Attribution</h3>
-                <div id="attribution" class="code-box"></div>
+              <!-- Overview -->
+              <div class="subtab-content active" id="sub-overview">
+                <div class="overview-grid">
+                  <div class="overview-block">
+                    <h4>At a glance</h4>
+                    <ul id="overviewBullets" class="bullet-list">
+                      <li class="muted">Run the analyzer to populate insights.</li>
+                    </ul>
+                  </div>
+                  <div class="overview-block">
+                    <h4>Risk factors</h4>
+                    <ul id="riskFactorsList" class="bullet-list">
+                      <li class="muted">No risk factors yet.</li>
+                    </ul>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h3>Tactics Matrix</h3>
-                <table class="matrix">
-                  <thead>
-                    <tr><th>Tactic</th><th>Observed</th></tr>
-                  </thead>
-                  <tbody id="tacticsMatrix"></tbody>
-                </table>
-              </div>
-            </section>
 
-            <section class="report-section reveal-item">
-              <div class="reasoning-head">
-                <h3>AI Deep Dive (DeepSeek R1)</h3>
-                <button id="showReasoningBtn" class="ghost-btn">Show AI Reasoning</button>
-              </div>
-              <pre id="reasoningStream" class="code-box reasoning-box hidden"></pre>
-            </section>
+              <!-- Sender Identity -->
+              <div class="subtab-content" id="sub-sender">
+                <div class="sender-visuals">
+                  <div class="auth-card" aria-label="Authentication results">
+                    <div class="block-head">
+                      <h4>Authentication</h4>
+                      <span class="block-sub" id="authVerdict">Awaiting analysis</span>
+                    </div>
+                    <div class="auth-chips" id="authChips"></div>
+                  </div>
 
-            <section class="report-section reveal-item export-row">
-              <button id="downloadPdfBtn" class="ghost-btn">Download PDF Report</button>
-              <button id="copyIocsBtn" class="ghost-btn">Copy IOCs</button>
-              <button id="shareAnalysisBtn" class="ghost-btn">Share Analysis</button>
+                  <div class="trust-card" aria-label="Sender trust score">
+                    <div class="block-head">
+                      <h4>Sender trust</h4>
+                      <span class="block-sub">0–100 trust score</span>
+                    </div>
+                    <div class="trust-meter">
+                      <div class="trust-meter-track">
+                        <div class="trust-meter-fill" id="trustMeterFill" style="width:0%"></div>
+                      </div>
+                      <div class="trust-meter-value" id="trustScoreValue">0 / 100</div>
+                    </div>
+                    <ul class="trust-bars" id="trustBars"></ul>
+                  </div>
+                </div>
+
+                <div class="kv-grid" id="senderKv"></div>
+                <p class="why hint">Why this matters: domain mismatches between From, Reply-To and Return-Path are a leading indicator of spoofing.</p>
+
+                <!-- legacy pill row (hidden) — keeps existing renderers working -->
+                <div id="authPills" class="pill-row" hidden></div>
+                <details class="raw-block">
+                  <summary>Raw sender block</summary>
+                  <pre id="senderPanel" class="code-box compact"></pre>
+                </details>
+              </div>
+
+              <!-- Links -->
+              <div class="subtab-content" id="sub-links">
+                <div class="link-cards" id="linkCardsList">
+                  <p class="muted small">No links analyzed yet.</p>
+                </div>
+                <p class="why hint">Why this matters: shorteners, multi-hop redirects, and lookalike domains are how attackers hide the true destination of a link.</p>
+
+                <details class="raw-block">
+                  <summary>Raw link table</summary>
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Original</th>
+                          <th>Resolved destination</th>
+                          <th>Hops</th>
+                          <th>Flags</th>
+                          <th>Homoglyph</th>
+                        </tr>
+                      </thead>
+                      <tbody id="urlTableBody"></tbody>
+                    </table>
+                  </div>
+                </details>
+              </div>
+
+              <!-- Content -->
+              <div class="subtab-content" id="sub-content">
+                <div class="content-tags" id="contentTags"></div>
+                <div id="highlightedEmail" class="code-box scrollbox"></div>
+                <div id="wordCloud" class="word-cloud"></div>
+                <p class="why hint">Why this matters: highlighted phrases trigger urgency, fear, or credential-handover psychology — classic phishing levers.</p>
+              </div>
+
+              <!-- Attribution -->
+              <div class="subtab-content" id="sub-attribution">
+                <div class="attribution-grid">
+                  <div>
+                    <h4>Attack profile</h4>
+                    <pre id="attribution" class="code-box compact"></pre>
+                  </div>
+                  <div>
+                    <h4>Tactics matrix</h4>
+                    <table class="matrix">
+                      <thead>
+                        <tr><th>Tactic</th><th>Observed</th></tr>
+                      </thead>
+                      <tbody id="tacticsMatrix"></tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="reasoning-head">
+                  <h4>AI deep dive</h4>
+                  <button id="showReasoningBtn" class="ghost-btn small">Show AI Reasoning</button>
+                </div>
+                <pre id="reasoningStream" class="code-box reasoning-box hidden"></pre>
+              </div>
+
+              <!-- Raw JSON -->
+              <div class="subtab-content" id="sub-json">
+                <div class="json-toolbar">
+                  <h4>Full report payload</h4>
+                  <div class="json-actions">
+                    <button id="copyJsonBtn" class="ghost-btn small">Copy</button>
+                    <button id="downloadPdfBtn" class="ghost-btn small">Download PDF</button>
+                    <button id="copyIocsBtn" class="ghost-btn small">Copy IOCs</button>
+                    <button id="shareAnalysisBtn" class="ghost-btn small">Share</button>
+                  </div>
+                </div>
+                <pre id="rawJson" class="code-box scrollbox json-box">{ "status": "awaiting analysis" }</pre>
+              </div>
             </section>
           </div>
         </section>
       </main>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="app.js"></script>
