@@ -138,7 +138,39 @@ apiApp.post('/api/analyze', async (req, res) => {
     const ai = await aiAnalyzer.aiDeepAnalysis(rawEmail || emailBody, combined);
     sendEvent('partial', { section: 'ai', data: ai });
 
-    const risk = riskScorer.scoreEmail(combined);
+    const ruleRisk = riskScorer.scoreEmail(combined);
+    const aiScore = Number.isFinite(ai?.risk_score) ? ai.risk_score : 0;
+    const aiFlagLabels = Array.isArray(ai?.red_flags)
+      ? ai.red_flags.map((f) => f.label).filter(Boolean)
+      : [];
+
+    const finalScore = Math.max(0, Math.min(100, Math.max(ruleRisk.score || 0, aiScore)));
+    const severityFromScore = (s) => {
+      if (s <= 20) return 'safe';
+      if (s <= 40) return 'low';
+      if (s <= 60) return 'moderate';
+      if (s <= 80) return 'high';
+      return 'critical';
+    };
+
+    const mergedReasons = [];
+    const seen = new Set();
+    [...aiFlagLabels, ...(ruleRisk.topReasons || [])].forEach((reason) => {
+      const key = String(reason || '').trim().toLowerCase();
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      mergedReasons.push(reason);
+    });
+
+    const risk = {
+      ...ruleRisk,
+      score: finalScore,
+      severity: severityFromScore(finalScore),
+      ruleScore: ruleRisk.score || 0,
+      aiScore,
+      topReasons: mergedReasons.slice(0, 8)
+    };
+
     sendEvent('progress', { step: 'riskScorer', message: '✓ Risk score computed' });
 
     sendEvent('complete', {

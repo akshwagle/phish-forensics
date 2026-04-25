@@ -93,16 +93,18 @@ function setTab(tabId) {
 }
 
 function severityText(score) {
-  if (score >= 81) return 'CRITICAL THREAT';
-  if (score >= 51) return 'DANGEROUS';
-  if (score >= 21) return 'SUSPICIOUS';
+  if (score > 80) return 'CRITICAL THREAT';
+  if (score > 60) return 'HIGH RISK';
+  if (score > 40) return 'MODERATE';
+  if (score > 20) return 'LOW RISK';
   return 'SAFE';
 }
 
 function severityColor(score) {
-  if (score >= 81) return '#ff3b5c';
-  if (score >= 51) return '#ff6f3b';
-  if (score >= 21) return '#ffaa00';
+  if (score > 80) return '#ff3b5c';
+  if (score > 60) return '#ff6f3b';
+  if (score > 40) return '#ffaa00';
+  if (score > 20) return '#ffd166';
   return '#00ff88';
 }
 
@@ -124,14 +126,29 @@ function animateGauge(targetScore) {
   requestAnimationFrame(tick);
 }
 
-function createFlagCard(reason, index) {
+function escapeHtml(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function createFlagCard(flag, index) {
+  const label = typeof flag === 'string' ? flag : flag?.label || 'Unnamed signal';
+  const evidence =
+    typeof flag === 'object' && flag?.evidence
+      ? flag.evidence
+      : `Evidence stream #${index + 1}`;
+
   const card = document.createElement('div');
   card.className = 'red-flag-card';
   card.innerHTML = `
     <div class="severity-bar"></div>
     <div class="red-flag-main">
-      <strong>${reason}</strong>
-      <small>Evidence stream #${index + 1}</small>
+      <strong>${escapeHtml(label)}</strong>
+      <small>${escapeHtml(evidence)}</small>
     </div>
     <button class="expand-btn">details</button>
     <div class="red-flag-detail">Forensic context: this signal had a high weighted contribution in the final risk score model.</div>
@@ -236,8 +253,14 @@ function typewriter(text, target) {
 function renderReport(report) {
   const data = report || {};
   const signals = data.signals || {};
+  const ai = data.ai || {};
   const risk = data.risk || { score: 0, topReasons: [] };
-  const score = Math.max(0, Math.min(100, risk.score || 0));
+
+  const ruleScore = Number(risk.score) || 0;
+  const aiScore = Number.isFinite(Number(ai.risk_score)) ? Number(ai.risk_score) : 0;
+  const score = Math.max(0, Math.min(100, Math.max(ruleScore, aiScore)));
+
+  console.log('[renderReport] ruleScore=%d aiScore=%d finalScore=%d', ruleScore, aiScore, score);
 
   el.skeletonState.classList.add('hidden');
   el.emptyState.classList.add('hidden');
@@ -251,9 +274,20 @@ function renderReport(report) {
   el.aiSummary.textContent = displaySummary;
   animateGauge(score);
 
-  const reasons = risk.topReasons || [];
+  const aiFlags = Array.isArray(ai.red_flags) ? ai.red_flags : [];
+  const ruleReasons = (risk.topReasons || []).map((reason) => ({ label: reason, evidence: '' }));
+
+  const merged = [];
+  const seen = new Set();
+  [...aiFlags, ...ruleReasons].forEach((flag) => {
+    const key = String(flag?.label || '').trim().toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    merged.push(flag);
+  });
+
   el.redFlagsList.innerHTML = '';
-  reasons.slice(0, 5).forEach((reason, idx) => el.redFlagsList.appendChild(createFlagCard(reason, idx)));
+  merged.slice(0, 6).forEach((flag, idx) => el.redFlagsList.appendChild(createFlagCard(flag, idx)));
 
   const homographMap = new Map((signals.homographResult?.domains || []).map((item) => [item.domain, item.result]));
   const enrichedUrls = (signals.urlResult?.urls || []).map((entry) => {
@@ -286,7 +320,6 @@ function renderReport(report) {
   el.highlightedEmail.innerHTML = highlightContent(appState.currentEmail, contentResult.redFlags || []);
   renderWordCloud(contentResult.redFlags || []);
 
-  const ai = data.ai || {};
   el.attribution.textContent = [
     `Attack Type: ${ai.attackType || 'other'}`,
     `Sophistication: ${ai.sophistication || 'unknown'}`,
