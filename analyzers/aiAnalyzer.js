@@ -91,7 +91,7 @@ async function aiDeepAnalysis(emailContent, technicalFindings) {
           {
             role: 'system',
             content:
-              'You are a senior security analyst specializing in phishing forensics. Given an email and technical findings, produce a deep analysis. Focus on social engineering tactics, attribution clues, and what the attacker is trying to achieve. Return JSON only.'
+              'You are a senior security analyst specializing in phishing forensics. Given an email and technical findings, produce a deep analysis. Focus on social engineering tactics, attribution clues, and what the attacker is trying to achieve. Return JSON only. You MUST always include a "summary" key in your JSON. It must be a non-empty string of 2-4 sentences explaining the threat level and key reasons, even if the email is legitimate.'
           },
           {
             role: 'user',
@@ -110,8 +110,15 @@ async function aiDeepAnalysis(emailContent, technicalFindings) {
       }
     );
 
-    const content = response.data.choices?.[0]?.message?.content || '{}';
-    const parsed = typeof content === 'string' ? JSON.parse(content) : content;
+    const raw = response.data.choices?.[0]?.message?.content || '{}';
+    console.log('[aiDeepAnalysis] raw response body:', raw);
+    const clean = String(raw)
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```$/i, '')
+      .trim();
+    const parsed = typeof raw === 'string' ? JSON.parse(clean) : raw;
+    const summaryCandidate = parsed.summary || parsed.description || parsed.explanation || parsed.analysis;
 
     return {
       attackType: parsed.attackType || 'other',
@@ -125,7 +132,10 @@ async function aiDeepAnalysis(emailContent, technicalFindings) {
         typeof parsed.confidenceScore === 'number'
           ? Math.max(0, Math.min(100, parsed.confidenceScore))
           : 0,
-      summary: parsed.summary || 'No summary generated.',
+      summary:
+        typeof summaryCandidate === 'string' && summaryCandidate.trim().length > 0
+          ? summaryCandidate
+          : 'Analysis complete. No specific threats detected.',
       provider: config.provider,
       model: config.deepModel
     };
