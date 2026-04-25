@@ -3,27 +3,196 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PhishLens</title>
+    <title>PhishLens | Forensic Email Analysis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="container">
-      <h1>PhishLens</h1>
-      <p class="subtitle">Phishing Forensics Sandbox</p>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <svg class="brand-icon" viewBox="0 0 120 120" aria-hidden="true">
+            <defs>
+              <linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#00d9ff" />
+                <stop offset="100%" stop-color="#00ff88" />
+              </linearGradient>
+            </defs>
+            <circle cx="48" cy="46" r="26" fill="none" stroke="url(#brandGrad)" stroke-width="7" />
+            <line x1="66" y1="64" x2="96" y2="94" stroke="url(#brandGrad)" stroke-width="8" stroke-linecap="round" />
+            <path d="M22 36 L48 54 L74 36 V74 H22 Z" fill="#131825" stroke="#00d9ff" stroke-width="4" />
+            <path d="M48 54 L48 76" stroke="#ff3b5c" stroke-width="5" />
+            <path d="M42 76 C42 88, 54 88, 54 96" stroke="#ff3b5c" stroke-width="5" fill="none" />
+          </svg>
+          <div>
+            <h1>PhishLens</h1>
+            <p>Forensic email analysis in seconds</p>
+          </div>
+        </div>
+        <div class="model-status" id="modelStatus">
+          <span class="status-dot"></span>
+          <span>AI online</span>
+        </div>
+      </header>
 
-      <textarea id="emailContent" placeholder="Paste suspicious email content"></textarea>
-      <textarea id="emailHeaders" placeholder="Paste raw email headers (optional)"></textarea>
-      <input id="urls" placeholder="Comma-separated URLs" />
-      <input id="attachments" placeholder="Comma-separated attachment names" />
+      <main class="main-grid">
+        <section class="panel input-panel">
+          <div class="tab-switch" role="tablist" aria-label="Input source tabs">
+            <button class="tab active" data-tab="paste">Paste Email</button>
+            <button class="tab" data-tab="upload">Upload .eml</button>
+            <button class="tab" data-tab="sample">Try Sample</button>
+          </div>
 
-      <div class="actions">
-        <button id="analyzeBtn">Analyze</button>
-        <button id="explainBtn">Deep Explain</button>
-      </div>
+          <div class="tab-content active" id="tab-paste">
+            <label for="rawEmail">Raw email (headers + body)</label>
+            <textarea
+              id="rawEmail"
+              class="forensic-input"
+              placeholder="From: PayPal Security <alerts@security-paypal-check.com>&#10;Reply-To: support@bitly-secure-check.net&#10;Return-Path: bounce@mailer-payment-alert.top&#10;Authentication-Results: spf=fail dkim=fail dmarc=fail&#10;Received: from unknown (185.244.25.44)&#10;&#10;Dear Customer,&#10;Your account is suspended. Verify within 24 hours: https://bit.ly/verify-now"
+            ></textarea>
+          </div>
 
-      <pre id="output">Results appear here...</pre>
-    </main>
+          <div class="tab-content" id="tab-upload">
+            <label for="emlUpload">Upload .eml file</label>
+            <input id="emlUpload" type="file" accept=".eml,message/rfc822,.txt" />
+            <p class="hint" id="uploadMeta">No file selected.</p>
+          </div>
 
+          <div class="tab-content" id="tab-sample">
+            <label for="samplePicker">Sample scenarios</label>
+            <select id="samplePicker">
+              <option value="paypal">PayPal Account Suspended</option>
+              <option value="bec">CEO Wire Transfer</option>
+              <option value="m365">Microsoft 365 Login</option>
+              <option value="crypto">Crypto Airdrop Scam</option>
+              <option value="newsletter">Legitimate Newsletter</option>
+            </select>
+            <button id="loadSampleBtn" class="ghost-btn">Load Sample into Editor</button>
+          </div>
+
+          <button id="analyzeBtn" class="analyze-btn">ANALYZE</button>
+
+          <div class="progress-track" id="progressTrack" aria-live="polite"></div>
+        </section>
+
+        <section class="panel results-panel" id="resultsPanel">
+          <div id="skeletonState" class="skeleton-state hidden">
+            <div class="skeleton-line lg"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-grid">
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+              <div class="skeleton-card"></div>
+            </div>
+            <p class="scan-line">Scanning targets and redirect chains...</p>
+          </div>
+
+          <div id="emptyState" class="empty-state">
+            <h2>Awaiting Forensic Input</h2>
+            <p>Paste or upload an email to generate a full incident-grade phishing report.</p>
+          </div>
+
+          <div id="reportRoot" class="report-root hidden">
+            <section class="report-section risk-hero reveal-item">
+              <div class="gauge-wrap">
+                <svg class="gauge" viewBox="0 0 220 220">
+                  <circle cx="110" cy="110" r="88" class="gauge-bg"></circle>
+                  <circle cx="110" cy="110" r="88" class="gauge-fill" id="gaugeFill"></circle>
+                </svg>
+                <div class="gauge-center">
+                  <div id="riskScore">0</div>
+                  <span>risk score</span>
+                </div>
+              </div>
+              <div class="hero-meta">
+                <h2 id="severityLabel">SAFE</h2>
+                <p id="aiSummary">No analysis yet.</p>
+              </div>
+            </section>
+
+            <section class="report-section reveal-item">
+              <h3>Top 5 Red Flags</h3>
+              <div id="redFlagsList" class="red-flag-list"></div>
+            </section>
+
+            <section class="report-section reveal-item">
+              <h3>URL Forensics</h3>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Original</th>
+                      <th>Destination</th>
+                      <th>Hops</th>
+                      <th>Flags</th>
+                      <th>Homograph</th>
+                    </tr>
+                  </thead>
+                  <tbody id="urlTableBody"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="report-section reveal-item sender-grid">
+              <div>
+                <h3>Sender Analysis</h3>
+                <div id="senderPanel" class="code-box"></div>
+              </div>
+              <div>
+                <h3>Auth Results</h3>
+                <div id="authPills" class="pill-row"></div>
+              </div>
+            </section>
+
+            <section class="report-section reveal-item">
+              <h3>Content Forensics</h3>
+              <div id="highlightedEmail" class="code-box"></div>
+              <div id="wordCloud" class="word-cloud"></div>
+            </section>
+
+            <section class="report-section reveal-item attribution-grid">
+              <div>
+                <h3>Attack Attribution</h3>
+                <div id="attribution" class="code-box"></div>
+              </div>
+              <div>
+                <h3>Tactics Matrix</h3>
+                <table class="matrix">
+                  <thead>
+                    <tr><th>Tactic</th><th>Observed</th></tr>
+                  </thead>
+                  <tbody id="tacticsMatrix"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="report-section reveal-item">
+              <div class="reasoning-head">
+                <h3>AI Deep Dive (DeepSeek R1)</h3>
+                <button id="showReasoningBtn" class="ghost-btn">Show AI Reasoning</button>
+              </div>
+              <pre id="reasoningStream" class="code-box reasoning-box hidden"></pre>
+            </section>
+
+            <section class="report-section reveal-item export-row">
+              <button id="downloadPdfBtn" class="ghost-btn">Download PDF Report</button>
+              <button id="copyIocsBtn" class="ghost-btn">Copy IOCs</button>
+              <button id="shareAnalysisBtn" class="ghost-btn">Share Analysis</button>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
