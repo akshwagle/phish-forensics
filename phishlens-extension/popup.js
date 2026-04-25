@@ -137,6 +137,7 @@ function resetBtn() {
 // ── Full Page Scan ──────────────────────────────────────────────────────────
 
 const btnFullScan = document.getElementById("btn-full-scan");
+const btnDeepScan = document.getElementById("btn-deep-scan");
 const btnClear    = document.getElementById("btn-clear");
 
 btnFullScan.addEventListener("click", () => {
@@ -160,6 +161,39 @@ btnClear.addEventListener("click", () => {
   if (!tab) return;
   chrome.tabs.sendMessage(tab.id, { type: "CLEAR_SCAN" }).catch(()=>{});
   btnClear.style.display = "none";
+});
+
+// ── Deep Scan ────────────────────────────────────────────────────────────────
+
+btnDeepScan.addEventListener("click", async () => {
+  if (!tab) return;
+  btnDeepScan.disabled = true;
+  btnDeepScan.innerHTML = '<span class="spin"></span>Starting deep scan…';
+
+  async function triggerDeepScan() {
+    await chrome.tabs.sendMessage(tab.id, { type: "DEEP_SCAN" });
+  }
+
+  try {
+    await triggerDeepScan();
+  } catch {
+    // Content script not injected — inject it first
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
+      await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ["alert.css"] });
+      await new Promise(r => setTimeout(r, 700));
+      await triggerDeepScan();
+    } catch (e) {
+      console.warn("[PhishLens Popup] Deep scan inject failed:", e.message);
+      alert("Cannot run Deep Scan on this page. Try on a regular website.");
+      btnDeepScan.disabled = false;
+      btnDeepScan.innerHTML = '🧬 Run Deep Scan <span class="deep-badge">3–5 MIN · 3 AI MODELS</span>';
+      return;
+    }
+  }
+
+  // Close popup so user can see the progress overlay on the page
+  setTimeout(() => window.close(), 600);
 });
 
 // ── Open App ────────────────────────────────────────────────────────────────

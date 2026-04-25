@@ -59,8 +59,12 @@ body { width:280px; background:#111827; color:#f1f5f9; font-family:system-ui,-ap
 .btn-scan { background:#1d4ed8; color:#fff; }
 .btn-scan:disabled { background:#1f2937; color:#374151; cursor:default; }
 .btn-open { background:#1f2937; color:#9ca3af; }
-.btn-full-scan { background:linear-gradient(135deg,#3b82f6,#6366f1); color:#fff; width:calc(100% - 28px); margin:0 14px 12px; padding:10px; border-radius:6px; border:none; font-size:13px; font-weight:700; cursor:pointer; }
+.btn-full-scan { background:linear-gradient(135deg,#3b82f6,#6366f1); color:#fff; width:calc(100% - 28px); margin:0 14px 6px; padding:10px; border-radius:6px; border:none; font-size:13px; font-weight:700; cursor:pointer; }
 .btn-full-scan:hover { opacity:.9; }
+.btn-deep-scan { background:linear-gradient(135deg,#7c3aed,#4f46e5); color:#fff; width:calc(100% - 28px); margin:0 14px 12px; padding:9px; border-radius:6px; border:none; font-size:12px; font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; }
+.btn-deep-scan:hover { opacity:.9; }
+.btn-deep-scan .deep-badge { background:rgba(255,255,255,.18); font-size:9px; padding:1px 5px; border-radius:3px; letter-spacing:.4px; }
+.btn-deep-scan:disabled { background:#1f2937; color:#374151; cursor:default; }
 .btn-clear { background:#475569; color:#f1f5f9; flex:0.5; }
 
 .spin { display:inline-block; width:10px; height:10px; border:2px solid #374151; border-top-color:#60a5fa; border-radius:50%; animation:spin .6s linear infinite; vertical-align:middle; margin-right:4px; }
@@ -102,6 +106,10 @@ body { width:280px; background:#111827; color:#f1f5f9; font-family:system-ui,-ap
 <div class="divider"></div>
 
 <button class="btn-full-scan" id="btn-full-scan" style="margin-top:12px;">🔍 Scan This Page</button>
+<button class="btn-deep-scan" id="btn-deep-scan">
+  🧬 Run Deep Scan
+  <span class="deep-badge">3–5 MIN · 3 AI MODELS</span>
+</button>
 
 <div class="btns">
   <button class="btn btn-scan" id="btn-scan">🔬 Scan Now</button>
@@ -109,7 +117,7 @@ body { width:280px; background:#111827; color:#f1f5f9; font-family:system-ui,-ap
   <button class="btn btn-open" id="btn-open">Open App ↗</button>
 </div>
 
-<div class="footer">Powered by Gemini AI · PhishLens v1.0</div>
+<div class="footer">Gemini AI · HackClub AI (Deep) · PhishLens v1.1</div>
 
 <script src="popup.js"></script>
 </body>

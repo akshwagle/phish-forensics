@@ -563,6 +563,483 @@
     });
   }
 
+  // ── Deep Scan ─────────────────────────────────────────────────────────────
+
+  async function fetchRawSource(url) {
+    try {
+      const res = await fetch(url, { method: 'GET', credentials: 'omit', cache: 'no-store' });
+      return await res.text();
+    } catch {
+      return document.documentElement.outerHTML;
+    }
+  }
+
+  function deepExtract(rawHTML, pageURL) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(rawHTML, 'text/html');
+
+    const allURLs = {
+      links: [...doc.querySelectorAll('a[href]')]
+        .map(a => a.getAttribute('href'))
+        .filter(h => h && h.startsWith('http')),
+
+      scripts: [...doc.querySelectorAll('script')].map(s => ({
+        src: s.getAttribute('src') || null,
+        inline: !s.getAttribute('src') ? s.textContent.slice(0, 500) : null,
+        hasObfuscation: /eval\(|atob\(|String\.fromCharCode|unescape\(|\\\x/.test(s.textContent)
+      })),
+
+      forms: [...doc.querySelectorAll('form')].map(f => ({
+        action: f.getAttribute('action'),
+        method: f.getAttribute('method'),
+        inputs: [...f.querySelectorAll('input')].map(i => ({
+          type: i.type, name: i.name, placeholder: i.placeholder
+        }))
+      })),
+
+      iframes: [...doc.querySelectorAll('iframe')].map(i => ({
+        src: i.getAttribute('src'),
+        width: i.getAttribute('width'),
+        height: i.getAttribute('height'),
+        hidden: i.getAttribute('width') === '0' || i.getAttribute('height') === '0' || i.style.display === 'none'
+      })),
+
+      images: [...doc.querySelectorAll('img')].map(i => ({
+        src: i.getAttribute('src'), alt: i.getAttribute('alt')
+      })).filter(i => i.src && !i.src.startsWith('data:')).slice(0, 20),
+
+      metaRefresh: doc.querySelector('meta[http-equiv="refresh"]')?.content || null
+    };
+
+    const inlineScripts = [...doc.querySelectorAll('script:not([src])')].map(s => s.textContent);
+    const scriptFlags = {
+      hasEval:          inlineScripts.some(s => /\beval\s*\(/.test(s)),
+      hasAtob:          inlineScripts.some(s => /\batob\s*\(/.test(s)),
+      hasObfuscation:   inlineScripts.some(s => /String\.fromCharCode|\\x[0-9a-f]{2}|\\u[0-9a-f]{4}/i.test(s)),
+      hasDocumentWrite: inlineScripts.some(s => /document\.write\s*\(/.test(s)),
+      hasWindowLocation:inlineScripts.some(s => /window\.location\s*=|location\.href\s*=|location\.replace\s*\(/.test(s)),
+      hasFetchPost:     inlineScripts.some(s => /fetch\s*\(|XMLHttpRequest|\.post\s*\(/.test(s)),
+      hasLocalStorage:  inlineScripts.some(s => /localStorage|sessionStorage/.test(s)),
+      hasCookieSteal:   inlineScripts.some(s => /document\.cookie/.test(s) && /fetch|XMLHttpRequest/.test(s)),
+      totalInlineScripts: inlineScripts.length,
+      suspiciousSample: inlineScripts.find(s => /eval|atob|fromCharCode/.test(s))?.slice(0, 300) || null
+    };
+
+    const metadata = {
+      title:           doc.title,
+      lang:            doc.documentElement.lang,
+      charset:         doc.charset,
+      metaDescription: doc.querySelector('meta[name="description"]')?.content,
+      ogSiteName:      doc.querySelector('meta[property="og:site_name"]')?.content,
+      ogTitle:         doc.querySelector('meta[property="og:title"]')?.content,
+      canonical:       doc.querySelector('link[rel="canonical"]')?.href,
+      generator:       doc.querySelector('meta[name="generator"]')?.content,
+      isWordPress:     /wp-content|wp-includes/.test(rawHTML),
+      isDrupal:        /drupal/.test(rawHTML.toLowerCase()),
+      isShopify:       /shopify/.test(rawHTML.toLowerCase()),
+      hasGoogleAnalytics:  /google-analytics|gtag|GA4/.test(rawHTML),
+      hasGoogleTagManager: /googletagmanager/.test(rawHTML)
+    };
+
+    let parsed;
+    try { parsed = new URL(pageURL); } catch { parsed = null; }
+    const host = parsed ? parsed.hostname.replace('www.', '') : pageURL;
+    const parts = host.split('.');
+    const domainCore = parts.length > 1 ? parts[parts.length - 2] : parts[0];
+    const tld = parts[parts.length - 1] || '';
+    const vowels = (domainCore.match(/[aeiou]/gi) || []).length;
+    const vowelRatio = vowels / (domainCore.length || 1);
+
+    const domainSignals = {
+      hostname: host, domainCore, tld,
+      domainLength: domainCore.length,
+      vowelRatio: vowelRatio.toFixed(2),
+      looksRandom: vowelRatio < 0.2 && domainCore.length <= 8,
+      hasNumbers: /\d/.test(domainCore),
+      hasDashes: /-/.test(domainCore),
+      suspiciousTLD: ['xyz','top','click','online','site','fun','pw','cc','info',
+        'tk','ml','ga','cf','gq','buzz','icu','vip','download','zip','mov'].includes(tld),
+      isHTTPS: pageURL.startsWith('https'),
+      subdomainCount: Math.max(0, parts.length - 2)
+    };
+
+    const visibleText = (doc.body?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 2000);
+    return { pageURL, domainSignals, metadata, allURLs, scriptFlags, visibleText,
+      rawHTMLSize: rawHTML.length, isTinyPage: rawHTML.length < 2000 };
+  }
+
+  async function getSecurityHeaders(url) {
+    try {
+      const res = await fetch(url, { method: 'HEAD', credentials: 'omit' });
+      return {
+        hasHSTS:        res.headers.has('strict-transport-security'),
+        hasCSP:         res.headers.has('content-security-policy'),
+        hasXFrame:      res.headers.has('x-frame-options'),
+        hasXContentType:res.headers.has('x-content-type-options'),
+        server:         res.headers.get('server') || 'unknown',
+        finalURL:       res.url,
+        wasRedirected:  res.url !== url,
+        redirectedTo:   res.url !== url ? res.url : null,
+        statusCode:     res.status
+      };
+    } catch { return { error: 'Could not fetch headers' }; }
+  }
+
+  async function checkDNS(domain) {
+    try {
+      const [mx, txt, a] = await Promise.all([
+        fetch(`https://dns.google/resolve?name=${domain}&type=MX`).then(r => r.json()),
+        fetch(`https://dns.google/resolve?name=${domain}&type=TXT`).then(r => r.json()),
+        fetch(`https://dns.google/resolve?name=${domain}&type=A`).then(r => r.json())
+      ]);
+      const hasMX = (mx.Answer?.length || 0) > 0;
+      const txtRecords = (txt.Answer || []).map(r => r.data).join(' ');
+      const hasSPF   = /v=spf1/.test(txtRecords);
+      const hasDMARC = txtRecords.includes('v=DMARC1');
+      const aRecord  = a.Answer?.[0]?.data || null;
+      return {
+        hasMXRecords: hasMX, hasSPFRecord: hasSPF, hasDMARCRecord: hasDMARC,
+        serverIP: aRecord,
+        legitimacySignal: hasMX && hasSPF ? 'has_email_infrastructure' : 'no_email_infrastructure'
+      };
+    } catch { return { error: 'DNS lookup failed' }; }
+  }
+
+  async function checkCertAge(domain) {
+    try {
+      const res = await fetch(`https://crt.sh/?q=${domain}&output=json`,
+        { signal: AbortSignal.timeout(8000) });
+      const certs = await res.json();
+      if (!certs.length) return { noCerts: true };
+      const sorted = certs.sort((a, b) => new Date(a.not_before) - new Date(b.not_before));
+      const firstCert = sorted[0];
+      const daysSinceFirstCert = Math.floor((Date.now() - new Date(firstCert.not_before)) / 86400000);
+      return {
+        firstSeenDate: firstCert.not_before, daysSinceFirstCert,
+        isVeryNew: daysSinceFirstCert < 7, isNew: daysSinceFirstCert < 30,
+        issuer: firstCert.issuer_name,
+        isFreeCert: /Let's Encrypt|ZeroSSL/.test(firstCert.issuer_name),
+        totalCertsEver: certs.length
+      };
+    } catch { return { error: 'Could not check certificate' }; }
+  }
+
+  const HACKCLUB_AI = 'https://ai.hackclub.com/chat/completions';
+
+  async function multiModelAnalysis(pageData) {
+    const systemPrompt = [
+      'You are a cybersecurity expert analyzing a web page for phishing and fraud.',
+      'You receive comprehensive technical data extracted from the page source.',
+      'Return ONLY raw JSON:',
+      '{',
+      '  "risk_score": 0-100,',
+      '  "verdict": "SAFE|SUSPICIOUS|DANGEROUS",',
+      '  "confidence": "low|medium|high",',
+      '  "summary": "2 sentences",',
+      '  "key_evidence": ["top 3 reasons for your verdict"],',
+      '  "is_phishing": true|false',
+      '}',
+      'CRITICAL RULE: A login page on a domain with low vowel ratio, no MX records,',
+      'cert < 30 days old, and missing security headers = Score 85+ regardless of content.'
+    ].join('\n');
+
+    const userMessage = JSON.stringify(pageData, null, 2).slice(0, 6000);
+
+    const models = [
+      'meta-llama/llama-3.1-8b-instruct',
+      'qwen/qwen3-32b',
+      'mistralai/mistral-7b-instruct'
+    ];
+
+    return Promise.all(models.map(model =>
+      fetch(HACKCLUB_AI, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user',   content: userMessage }
+          ],
+          max_tokens: 300
+        })
+      })
+      .then(r => r.json())
+      .then(r => {
+        const raw = (r.choices?.[0]?.message?.content || '{}')
+          .replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+        return { model, result: JSON.parse(raw) };
+      })
+      .catch(e => ({ model, result: null, error: e.message }))
+    ));
+  }
+
+  function buildConsensus(modelResults) {
+    const valid = modelResults.filter(r => r.result !== null);
+    if (!valid.length) return null;
+
+    const scores = valid.map(r => r.result.risk_score);
+    const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+    const verdicts = valid.map(r => r.result.verdict);
+    const dangerCount    = verdicts.filter(v => v === 'DANGEROUS').length;
+    const suspiciousCount = verdicts.filter(v => v === 'SUSPICIOUS').length;
+
+    let finalVerdict, finalScore;
+    if (dangerCount >= 2) {
+      finalVerdict = 'DANGEROUS'; finalScore = Math.max(avgScore, 75);
+    } else if (dangerCount >= 1) {
+      finalVerdict = 'SUSPICIOUS'; finalScore = Math.max(avgScore, 50);
+    } else if (suspiciousCount >= 2) {
+      finalVerdict = 'SUSPICIOUS'; finalScore = Math.max(avgScore, 45);
+    } else {
+      finalVerdict = 'SAFE'; finalScore = avgScore;
+    }
+
+    const allAgree  = new Set(verdicts).size === 1;
+    const confidence = allAgree ? 'high' : valid.length === 3 ? 'medium' : 'low';
+    const allEvidence = valid.flatMap(r => r.result.key_evidence || []).filter(Boolean);
+
+    return {
+      finalScore, finalVerdict, confidence, modelsUsed: valid.length,
+      modelScores: valid.map(r => ({
+        model:   r.model.split('/')[1] || r.model,
+        score:   r.result.risk_score,
+        verdict: r.result.verdict
+      })),
+      allEvidence: [...new Set(allEvidence)].slice(0, 5),
+      summary: valid[0]?.result?.summary || ''
+    };
+  }
+
+  // ── Deep Scan Progress UI ──────────────────────────────────────────────────
+
+  function updateDeepProgress(steps) {
+    let el = document.getElementById('pls-deep-overlay');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'pls-deep-overlay';
+      document.body.appendChild(el);
+    }
+    el.innerHTML = `
+      <div class="pls-deep-progress-box">
+        <div class="pls-deep-logo">🧬</div>
+        <div class="pls-deep-title">Deep Scan in Progress</div>
+        <div class="pls-deep-subtitle">Multi-model AI consensus · 3–5 min</div>
+        <div class="pls-deep-steps">
+          ${steps.map(s => `
+            <div class="pls-deep-step ${s.status}">
+              <span class="pls-deep-step-icon">
+                ${s.status === 'done' ? '✓' : s.status === 'active' ? '<span class="pls-spin"></span>' : '○'}
+              </span>
+              <span class="pls-deep-step-label">${esc(s.label)}</span>
+              ${s.detail ? `<span class="pls-deep-step-detail">${esc(s.detail)}</span>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+  }
+
+  function removeDeepOverlay() {
+    document.getElementById('pls-deep-overlay')?.remove();
+  }
+
+  // ── Deep Scan Results UI ───────────────────────────────────────────────────
+
+  function showDeepScanResults(consensus, details) {
+    document.getElementById('pls-deep-panel')?.remove();
+    const { certAge, dns, secHeaders } = details;
+    const c = consensus;
+    const vClass = c.finalVerdict.toLowerCase();
+    const vIcon  = { SAFE: '✅', SUSPICIOUS: '⚠️', DANGEROUS: '🛑' }[c.finalVerdict] || '?';
+    const confColor = { high: '#22c55e', medium: '#f59e0b', low: '#ef4444' }[c.confidence] || '#64748b';
+
+    const dnsHTML = dns && !dns.error ? [
+      ['MX records',   dns.hasMXRecords,  dns.hasMXRecords  ? 'Present' : 'Missing'],
+      ['SPF record',   dns.hasSPFRecord,  dns.hasSPFRecord  ? 'Present' : 'Missing'],
+      ['DMARC record', dns.hasDMARCRecord,dns.hasDMARCRecord ? 'Present' : 'Missing']
+    ].map(([label, ok, val]) => `
+      <div class="pls-deep-signal-row ${ok ? 'pass' : 'fail'}">
+        <span class="pls-dsr-icon">${ok ? '✓' : '✗'}</span>
+        <span>${label}</span>
+        <span class="pls-dsr-val">${val}</span>
+      </div>`).join('') : '';
+
+    const certHTML = certAge && !certAge.error && !certAge.noCerts ? `
+      <div class="pls-deep-signal-row ${certAge.isNew ? 'fail' : 'pass'}">
+        <span class="pls-dsr-icon">${certAge.isNew ? '⚠' : '✓'}</span>
+        <span>Cert age</span>
+        <span class="pls-dsr-val">${certAge.daysSinceFirstCert}d${certAge.isNew ? ' — new!' : ''}</span>
+      </div>
+      <div class="pls-deep-signal-row ${certAge.isFreeCert ? 'warn' : 'pass'}">
+        <span class="pls-dsr-icon">${certAge.isFreeCert ? '~' : '✓'}</span>
+        <span>Issuer</span>
+        <span class="pls-dsr-val">${certAge.isFreeCert ? "Let's Encrypt/ZeroSSL" : 'Paid CA'}</span>
+      </div>` : '';
+
+    const hdrHTML = secHeaders && !secHeaders.error ? [
+      ['HSTS',          secHeaders.hasHSTS],
+      ['CSP',           secHeaders.hasCSP],
+      ['X-Frame-Options',secHeaders.hasXFrame],
+      ['X-Content-Type', secHeaders.hasXContentType]
+    ].map(([name, has]) => `
+      <div class="pls-deep-signal-row ${has ? 'pass' : 'fail'}">
+        <span class="pls-dsr-icon">${has ? '✓' : '✗'}</span>
+        <span>${name}</span>
+        <span class="pls-dsr-val">${has ? 'Present' : 'Missing'}</span>
+      </div>`).join('') + (secHeaders.wasRedirected ? `
+      <div class="pls-deep-signal-row fail">
+        <span class="pls-dsr-icon">↪</span>
+        <span>Redirect detected</span>
+        <span class="pls-dsr-val" title="${esc(secHeaders.redirectedTo||'')}">
+          ${esc((secHeaders.redirectedTo||'').slice(0,28))}…
+        </span>
+      </div>` : '') : '';
+
+    const modelCardsHTML = (c.modelScores || []).map(m => {
+      const mc = m.verdict.toLowerCase();
+      return `
+        <div class="pls-model-card">
+          <div class="pls-mc-name">${esc(m.model)}</div>
+          <div class="pls-mc-score ${mc}">${m.score}</div>
+          <div class="pls-mc-verdict ${mc}">${m.verdict}</div>
+        </div>`;
+    }).join('');
+
+    const evidenceHTML = (c.allEvidence || []).length
+      ? (c.allEvidence).map(e => `<div class="pls-deep-evidence-item">• ${esc(e)}</div>`).join('')
+      : '<div class="pls-deep-evidence-item muted">No specific evidence flagged.</div>';
+
+    const panel = document.createElement('div');
+    panel.id = 'pls-deep-panel';
+    panel.innerHTML = `
+      <div class="pls-panel-hdr">
+        <span>🧬 Deep Scan Results</span>
+        <button class="pls-close-btn" id="pls-deep-close">✕</button>
+      </div>
+
+      <div class="pls-deep-consensus">
+        <div class="pls-deep-ring ${vClass}">${c.finalScore}</div>
+        <div class="pls-deep-verdict-block">
+          <div class="pls-deep-verdict-label ${vClass}">${vIcon} ${c.finalVerdict}</div>
+          <div class="pls-deep-conf" style="color:${confColor}">
+            ${c.confidence.toUpperCase()} CONFIDENCE · ${c.modelsUsed}/3 models
+          </div>
+          <div class="pls-deep-summary">${esc(c.summary)}</div>
+        </div>
+      </div>
+
+      <div class="pls-deep-section-label">Model Breakdown</div>
+      <div class="pls-model-row">${modelCardsHTML}</div>
+
+      <div class="pls-deep-section-label">Evidence</div>
+      <div class="pls-deep-evidence">${evidenceHTML}</div>
+
+      ${dnsHTML || certHTML ? `
+        <div class="pls-deep-section-label">DNS &amp; Certificate</div>
+        <div class="pls-deep-signals">${dnsHTML}${certHTML}</div>` : ''}
+
+      ${hdrHTML ? `
+        <div class="pls-deep-section-label">Security Headers</div>
+        <div class="pls-deep-signals">${hdrHTML}</div>` : ''}
+
+      <div class="pls-panel-footer">
+        <button class="pls-footer-btn pls-btn-export" id="pls-deep-copy">Copy JSON</button>
+        <button class="pls-footer-btn pls-btn-full"   id="pls-deep-full">Open Full Report</button>
+      </div>`;
+
+    document.body.appendChild(panel);
+    panel.querySelector('#pls-deep-close').onclick = () => panel.remove();
+    panel.querySelector('#pls-deep-full').onclick = () =>
+      window.open('https://phishlens.vercel.app/?url=' + encodeURIComponent(location.href), '_blank');
+    panel.querySelector('#pls-deep-copy').onclick = () =>
+      navigator.clipboard.writeText(
+        JSON.stringify({ consensus: c, details }, null, 2)
+      ).catch(() => {});
+  }
+
+  // ── Deep Scan Orchestrator ─────────────────────────────────────────────────
+
+  async function runDeepScan() {
+    document.getElementById('pls-deep-panel')?.remove();
+    const pageURL = location.href;
+    let domain;
+    try { domain = new URL(pageURL).hostname; } catch { return; }
+
+    const STEPS = [
+      { label: 'Fetching raw page source',          status: 'pending', detail: '' },
+      { label: 'Extracting signals from HTML',       status: 'pending', detail: '' },
+      { label: 'Checking DNS records',               status: 'pending', detail: '' },
+      { label: 'Checking certificate age (crt.sh)',  status: 'pending', detail: '' },
+      { label: 'Checking security headers',          status: 'pending', detail: '' },
+      { label: 'Running 3 AI models in parallel',    status: 'pending', detail: '' },
+      { label: 'Building consensus verdict',         status: 'pending', detail: '' }
+    ];
+
+    const setStep = (i, status, detail = '') => {
+      STEPS[i].status = status; STEPS[i].detail = detail;
+      updateDeepProgress(STEPS);
+    };
+
+    updateDeepProgress(STEPS);
+
+    // Step 0 — raw source
+    setStep(0, 'active');
+    const rawHTML = await fetchRawSource(pageURL);
+    setStep(0, 'done', `${(rawHTML.length / 1024).toFixed(1)} KB`);
+
+    // Step 1 — extract
+    setStep(1, 'active');
+    const extracted = deepExtract(rawHTML, pageURL);
+    setStep(1, 'done',
+      `${extracted.allURLs.links.length} links · ${extracted.allURLs.forms.length} forms · ` +
+      `${extracted.scriptFlags.totalInlineScripts} scripts`);
+
+    // Steps 2-4 — network checks in parallel
+    setStep(2, 'active'); setStep(3, 'active'); setStep(4, 'active');
+    const [dns, certAge, secHeaders] = await Promise.all([
+      checkDNS(domain),
+      checkCertAge(domain),
+      getSecurityHeaders(pageURL)
+    ]);
+    setStep(2, 'done', dns.error     ? 'Failed' : `MX:${dns.hasMXRecords ? '✓' : '✗'} SPF:${dns.hasSPFRecord ? '✓' : '✗'} DMARC:${dns.hasDMARCRecord ? '✓' : '✗'}`);
+    setStep(3, 'done', certAge.error ? 'Failed' : certAge.noCerts ? 'No certs found' : `${certAge.daysSinceFirstCert} days old`);
+    setStep(4, 'done', secHeaders.error ? 'Failed' : `HSTS:${secHeaders.hasHSTS ? '✓' : '✗'} CSP:${secHeaders.hasCSP ? '✓' : '✗'}`);
+
+    // Step 5 — AI models
+    setStep(5, 'active', 'llama-3.1 · qwen3-32b · mistral-7b');
+    const pageData = {
+      pageURL, domain,
+      domainSignals: extracted.domainSignals,
+      metadata:      extracted.metadata,
+      scriptFlags:   extracted.scriptFlags,
+      formCount:     extracted.allURLs.forms.length,
+      linkCount:     extracted.allURLs.links.length,
+      iframeCount:   extracted.allURLs.iframes.length,
+      hiddenIframes: extracted.allURLs.iframes.filter(i => i.hidden).length,
+      isTinyPage:    extracted.isTinyPage,
+      visibleText:   extracted.visibleText.slice(0, 1500),
+      dns, certAge, secHeaders
+    };
+    const modelResults = await multiModelAnalysis(pageData);
+    const successCount = modelResults.filter(r => r.result !== null).length;
+    setStep(5, 'done', `${successCount}/3 models responded`);
+
+    // Step 6 — consensus
+    setStep(6, 'active');
+    const consensus = buildConsensus(modelResults);
+    if (!consensus) {
+      setStep(6, 'done', 'All models failed — no consensus');
+      await new Promise(r => setTimeout(r, 1500));
+      removeDeepOverlay();
+      return;
+    }
+    setStep(6, 'done', `Score: ${consensus.finalScore} · ${consensus.finalVerdict}`);
+
+    await new Promise(r => setTimeout(r, 800));
+    removeDeepOverlay();
+    showDeepScanResults(consensus, { dns, certAge, secHeaders, extracted });
+  }
+
   // ── Message listener ───────────────────────────────────────────────────────
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -580,6 +1057,10 @@
     }
     if (msg.type === "CLEAR_SCAN") {
       clearScan();
+      sendResponse({ ok: true });
+    }
+    if (msg.type === "DEEP_SCAN") {
+      runDeepScan();
       sendResponse({ ok: true });
     }
     return true;
